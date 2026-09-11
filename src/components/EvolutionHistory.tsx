@@ -6,7 +6,7 @@ type EvolutionHistoryProps = {
 
 export function EvolutionHistory({ events }: EvolutionHistoryProps) {
   return (
-    <section className="panel">
+    <section className="panel history-panel">
       <div className="panel-title">
         <h3>Evolution history</h3>
         <span className="panel-badge">{events.length} events</span>

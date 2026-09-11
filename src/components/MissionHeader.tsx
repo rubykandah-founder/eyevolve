@@ -45,13 +45,13 @@ export function MissionHeader({
             <span className="mode-pill">{modeLabel(mode)}</span>
           </div>
         </div>
+        <div className="metric">
+          <div className="metric-label">Decision driver</div>
+          <div className="metric-value">{engineLabel}</div>
+        </div>
         <button className="reset-button danger-button" onClick={onReset}>
           Reset evolution
         </button>
-        <div className="metric">
-          <div className="metric-label">Evolution engine</div>
-          <div className="metric-value">{engineLabel}</div>
-        </div>
       </div>
     </header>
   );
