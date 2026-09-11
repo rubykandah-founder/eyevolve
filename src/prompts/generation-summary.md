@@ -9,6 +9,8 @@ Rules:
 - The `compactOverlay` object is what the user sees first. Make it extremely short, plain, and practical.
 - Write `compactOverlay` in Strunk-and-White style: direct nouns, active verbs, no filler, no dashboard language.
 - The overlay should answer only: what mattered, what can quiet down, what behavior changed, and what comes next.
+- Use the provided `nextScene` when writing `nextObservation`. Name why that scene is useful now; do not use generic phrases like "next observation remains open" or "select the next observation."
+- For seasonal-risk scenes, explain that EYEVOLVE is projecting how benign current signals could worsen later and choosing preparation rather than emergency response.
 - Mention uncertainty honestly when the model still needs evidence.
 - Do not claim real-world outreach happened; actions are simulated.
 - Return only JSON matching the schema.

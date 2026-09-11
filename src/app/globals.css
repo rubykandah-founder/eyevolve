@@ -419,6 +419,17 @@ button:disabled {
   color: var(--red);
 }
 
+.change-card.user-potential {
+  border-color: rgba(37, 99, 235, 0.34);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.11), rgba(255, 255, 255, 0.9)),
+    rgba(255, 255, 255, 0.86);
+}
+
+.change-card.user-potential .change-name {
+  color: var(--blue);
+}
+
 .change-card.user-ignored {
   border-color: rgba(24, 35, 43, 0.08);
   background: rgba(239, 243, 245, 0.78);
@@ -457,6 +468,18 @@ button:disabled {
   border-color: rgba(212, 63, 58, 0.42);
   background: rgba(212, 63, 58, 0.12);
   color: #7d2020;
+}
+
+.potential-button {
+  border-color: rgba(37, 99, 235, 0.22);
+  color: #2453b8;
+}
+
+.potential-button:hover:not(:disabled),
+.potential-button.active {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4398;
 }
 
 .ignore-button {
@@ -593,6 +616,55 @@ button:disabled {
     linear-gradient(90deg, var(--cyan), var(--green));
   background-size: 34px 34px, 100% 100%;
   animation: observationProgress 1.1s linear infinite;
+}
+
+.projection-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(150px, 0.8fr);
+  gap: 10px;
+  align-items: stretch;
+  margin: 10px 0;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 8px;
+  padding: 10px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.72)),
+    rgba(255, 255, 255, 0.74);
+}
+
+.projection-copy {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.projection-copy strong {
+  color: var(--blue);
+  font-size: 0.96rem;
+  line-height: 1.25;
+}
+
+.projection-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.38;
+}
+
+.projection-image {
+  overflow: hidden;
+  min-height: 126px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 8px;
+  background: #eef4f2;
+}
+
+.projection-image svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 126px;
 }
 
 .button-row {
@@ -1910,9 +1982,26 @@ button:disabled {
   }
 
   .learned-callout,
-  .correction-box {
+  .correction-box,
+  .projection-card {
     margin-top: 8px;
     padding: 9px;
+  }
+
+  .projection-card {
+    grid-template-columns: minmax(0, 1fr) minmax(132px, 0.65fr);
+  }
+
+  .projection-copy p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .projection-image,
+  .projection-image svg {
+    min-height: 104px;
   }
 
   .select-field {
@@ -2002,6 +2091,10 @@ button:disabled {
   }
 
   .event-progress-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .projection-card {
     grid-template-columns: 1fr;
   }
 

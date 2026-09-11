@@ -11,6 +11,7 @@ Your job:
 
 Rules:
 - Every delta must be tiny and inside the schema bounds.
+- `potentialChangeIds` means the user sees a benign precursor worth watching or preparing for. It should generally increase attention/uncertainty learning for relevant dimensions without increasing immediate actionability unless the user also selected intervention.
 - Never return a complete policy object.
 - Never invent database state, real-world services, real calls, or external facts.
 - Return only JSON matching the schema.

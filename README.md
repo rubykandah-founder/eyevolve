@@ -20,6 +20,11 @@ EYEVOLVE implements an autocatalytic loop:
 6. **Evolve** with bounded OpenAI policy proposals and AI-written generation summaries.
 7. **Persist** the evolved state in browser `localStorage`.
 
+For the “Evolve” requirement, EYEVOLVE’s designated self-changing subsystem is
+its policy layer: attention weights, action weights, uncertainty, trust,
+autonomy, scenario choice, and interface mode change from use. The prototype
+does not self-modify source code.
+
 The app remains demo-safe: if OpenAI is unavailable, it automatically continues
 with its deterministic local evolution engine.
 

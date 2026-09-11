@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { selectAutonomousActionPlan } from "@/lib/evolution-narrative";
 import { formatScore } from "@/lib/scoring";
+import { SceneRenderer } from "./SceneRenderer";
 import { SimulatedCall } from "./SimulatedCall";
 
 type IntelligencePanelProps = {
@@ -22,6 +23,7 @@ type IntelligencePanelProps = {
   ranking: string[];
   selectedActionIds: string[];
   prioritizedChangeIds: string[];
+  potentialChangeIds: string[];
   ignoredChangeIds: string[];
   aiPrimaryChangeId?: string;
   aiSuppressedChangeIds: string[];
@@ -35,6 +37,7 @@ type IntelligencePanelProps = {
   actionsPaused: boolean;
   onHoverChange: (changeId: string | null) => void;
   onPrioritizeChange: (changeId: string) => void;
+  onPotentialChange: (changeId: string) => void;
   onIgnoreChange: (changeId: string) => void;
   onToggleAction: (changeId: string) => void;
   onSubmitHuman: () => void;
@@ -116,13 +119,41 @@ function EventProgressStrip({
   );
 }
 
+function ProjectionCard({ scene }: { scene: SceneDef }) {
+  if (!scene.projection) {
+    return null;
+  }
+
+  const highlightedObjectIds = scene.projection.objects
+    .filter((object) => object.status === "hazard" || object.status === "action")
+    .map((object) => object.id);
+
+  return (
+    <section className="projection-card" aria-label="AI projected future state">
+      <div className="projection-copy">
+        <span className="eyebrow">{scene.projection.label}</span>
+        <strong>Projected later-state image</strong>
+        <p>{scene.projection.description}</p>
+      </div>
+      <div className="projection-image">
+        <SceneRenderer
+          objects={scene.projection.objects}
+          highlightedObjectIds={highlightedObjectIds}
+        />
+      </div>
+    </section>
+  );
+}
+
 function RankingEditor({
   scores,
   ranking,
   selectedActionIds,
   prioritizedChangeIds,
+  potentialChangeIds,
   ignoredChangeIds,
   onPrioritizeChange,
+  onPotentialChange,
   onIgnoreChange,
   onToggleAction,
   onHoverChange,
@@ -132,8 +163,10 @@ function RankingEditor({
   | "ranking"
   | "selectedActionIds"
   | "prioritizedChangeIds"
+  | "potentialChangeIds"
   | "ignoredChangeIds"
   | "onPrioritizeChange"
+  | "onPotentialChange"
   | "onIgnoreChange"
   | "onToggleAction"
   | "onHoverChange"
@@ -141,12 +174,14 @@ function RankingEditor({
   const byId = new Map(scores.map((score) => [score.id, score]));
   const ranked = ranking.map((id) => byId.get(id)).filter(Boolean) as ScoredChange[];
   const prioritized = new Set(prioritizedChangeIds);
+  const potential = new Set(potentialChangeIds);
   const ignored = new Set(ignoredChangeIds);
 
   return (
     <div className="change-list">
       {ranked.map((change, index) => {
         const isPrioritized = prioritized.has(change.id);
+        const isPotential = potential.has(change.id);
         const isIgnored = ignored.has(change.id);
 
         return (
@@ -154,6 +189,7 @@ function RankingEditor({
           className={[
             "change-card",
             isPrioritized ? "user-prioritized" : "",
+            isPotential ? "user-potential" : "",
             isIgnored ? "user-ignored" : "",
           ]
             .filter(Boolean)
@@ -181,6 +217,15 @@ function RankingEditor({
                 Prioritize
               </button>
               <button
+                className={`judgment-button potential-button ${
+                  isPotential ? "active" : ""
+                }`}
+                aria-pressed={isPotential}
+                onClick={() => onPotentialChange(change.id)}
+              >
+                Potential
+              </button>
+              <button
                 className={`judgment-button ignore-button ${
                   isIgnored ? "active" : ""
                 }`}
@@ -194,8 +239,8 @@ function RankingEditor({
           <label className="action-select">
             <input
               type="checkbox"
-              checked={selectedActionIds.includes(change.id) && !isIgnored}
-              disabled={isIgnored}
+              checked={selectedActionIds.includes(change.id) && !isIgnored && !isPotential}
+              disabled={isIgnored || isPotential}
               onChange={() => onToggleAction(change.id)}
             />
             Requires intervention
@@ -321,6 +366,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     ranking,
     selectedActionIds,
     prioritizedChangeIds,
+    potentialChangeIds,
     ignoredChangeIds,
     aiPrimaryChangeId,
     aiSuppressedChangeIds,
@@ -334,6 +380,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     actionsPaused,
     onHoverChange,
     onPrioritizeChange,
+    onPotentialChange,
     onIgnoreChange,
     onToggleAction,
     onSubmitHuman,
@@ -493,8 +540,8 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           <span className="panel-badge">{eventProgressLabel}</span>
         </div>
         <p className="change-description">
-          Prioritize what matters or ignore background events. Prioritized
-          events move to the top; ignored events move to the bottom.
+          Prioritize what matters now, mark benign precursor patterns as
+          potential, or ignore background events.
         </p>
         {isControlledTraining ? (
           <div className="ai-detection-note">
@@ -519,8 +566,10 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           ranking={ranking}
           selectedActionIds={selectedActionIds}
           prioritizedChangeIds={prioritizedChangeIds}
+          potentialChangeIds={potentialChangeIds}
           ignoredChangeIds={ignoredChangeIds}
           onPrioritizeChange={onPrioritizeChange}
+          onPotentialChange={onPotentialChange}
           onIgnoreChange={onIgnoreChange}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
@@ -548,8 +597,10 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           ranking={ranking}
           selectedActionIds={selectedActionIds}
           prioritizedChangeIds={prioritizedChangeIds}
+          potentialChangeIds={potentialChangeIds}
           ignoredChangeIds={ignoredChangeIds}
           onPrioritizeChange={onPrioritizeChange}
+          onPotentialChange={onPotentialChange}
           onIgnoreChange={onIgnoreChange}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
@@ -604,6 +655,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
         {eventsReady ? (
           <>
             <AiPriorityList scores={scores} onHoverChange={onHoverChange} showIgnored />
+            <ProjectionCard scene={scene} />
             <div className="learned-callout">
               <div className="eyebrow">Action recommendation</div>
               <strong>
@@ -637,25 +689,40 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
             <span className="eyebrow">Exception management</span>
             <h2>Only meaningful exceptions</h2>
           </div>
-          <span className="panel-badge">{ignored.length} suppressed</span>
+          <span className="panel-badge">
+            {eventsReady ? `${ignored.length} suppressed` : eventProgressLabel}
+          </span>
         </div>
-        <AutonomousScanList
-          scores={scores}
-          primaryId={autonomousPrimaryId}
-          imagesReady={autonomousImagesReady}
-          scanIndex={autonomousScanIndex}
-          suppressedIds={aiSuppressedChangeIds}
-          primaryStatusLabel={actionPlan.label}
-          onHoverChange={onHoverChange}
-        />
-        <div className={`learned-callout ${scanComplete ? "" : "pending-scan"}`}>
-          <div className="eyebrow">Proposed action</div>
-          <strong>
-            {scanComplete
-              ? actionPlan.headline
-              : "Scanning observed changes..."}
-          </strong>
-        </div>
+        {!eventsReady ? (
+          <EventProgressStrip
+            isAnalyzingScene={isAnalyzingScene}
+            isPopulatingEvents={isPopulatingEvents}
+            foundCount={scores.length}
+            totalCount={totalChangeCount}
+            label="Building exception review"
+          />
+        ) : (
+          <>
+            <ProjectionCard scene={scene} />
+            <AutonomousScanList
+              scores={scores}
+              primaryId={autonomousPrimaryId}
+              imagesReady={autonomousImagesReady}
+              scanIndex={autonomousScanIndex}
+              suppressedIds={aiSuppressedChangeIds}
+              primaryStatusLabel={actionPlan.label}
+              onHoverChange={onHoverChange}
+            />
+            <div className={`learned-callout ${scanComplete ? "" : "pending-scan"}`}>
+              <div className="eyebrow">Proposed action</div>
+              <strong>
+                {scanComplete
+                  ? actionPlan.headline
+                  : "Scanning observed changes..."}
+              </strong>
+            </div>
+          </>
+        )}
         <div className="button-row">
           <button
             className="primary-button"
@@ -688,22 +755,37 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
             <span className="eyebrow">Autonomous mode</span>
             <h2>Autonomous dispatch</h2>
           </div>
-          <span className="panel-badge">Override available</span>
+          <span className="panel-badge">
+            {eventsReady ? "Override available" : eventProgressLabel}
+          </span>
         </div>
-        <AutonomousScanList
-          scores={scores}
-          primaryId={autonomousPrimaryId}
-          imagesReady={autonomousImagesReady}
-          scanIndex={autonomousScanIndex}
-          suppressedIds={aiSuppressedChangeIds}
-          primaryStatusLabel={actionPlan.label}
-          onHoverChange={onHoverChange}
-        />
-        <div className="button-row">
-          <button className="secondary-button" disabled={isEvolving} onClick={onStartCorrection}>
-            Override
-          </button>
-        </div>
+        {!eventsReady ? (
+          <EventProgressStrip
+            isAnalyzingScene={isAnalyzingScene}
+            isPopulatingEvents={isPopulatingEvents}
+            foundCount={scores.length}
+            totalCount={totalChangeCount}
+            label="Preparing autonomous review"
+          />
+        ) : (
+          <>
+            <ProjectionCard scene={scene} />
+            <AutonomousScanList
+              scores={scores}
+              primaryId={autonomousPrimaryId}
+              imagesReady={autonomousImagesReady}
+              scanIndex={autonomousScanIndex}
+              suppressedIds={aiSuppressedChangeIds}
+              primaryStatusLabel={actionPlan.label}
+              onHoverChange={onHoverChange}
+            />
+            <div className="button-row">
+              <button className="secondary-button" disabled={isEvolving} onClick={onStartCorrection}>
+                Override
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {showActionOverlay ? (

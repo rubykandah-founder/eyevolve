@@ -71,7 +71,63 @@ export const selectAutonomousActionPlan = (
   const isWildlife =
     scene.scenarioType === "wildlife" ||
     containsAny(text, ["bear", "wildlife", "animal"]);
+  const isSeasonalRisk =
+    scene.scenarioType === "seasonal-risk" ||
+    containsAny(text, [
+      "forecast",
+      "fuel",
+      "projected",
+      "projection",
+      "readiness",
+      "seasonal",
+      "snowpack",
+    ]);
   const shouldEscalate = isFire || (isBlockage && actionable.actionScore > 0.78);
+
+  if (isSeasonalRisk) {
+    return {
+      kind: "ticket",
+      label: "Ticket",
+      headline:
+        actionable.suggestedAction ??
+        scene.recommendedAction ??
+        "File seasonal readiness ticket",
+      description:
+        "The current image is calm, but EYEVOLVE projects a later-season risk and creates a preparation ticket instead of dispatching now.",
+      receiverLabel: scene.actionService ?? "Seasonal planning queue",
+      receiverRole: "Readiness queue",
+      bridgeLabel: "Projection to ticket",
+      artifactLabel: "Simulated queue",
+      artifactValue: "PREP-2040",
+      artifactNote: "Routed as preparation work, not an active incident.",
+      stateLabel: "Ticketing",
+      completeLabel: "Readiness ticket created",
+      steps: [
+        {
+          label: "Build projected state",
+          detail: "Translate the benign current signal into a later-season risk picture.",
+        },
+        {
+          label: "Package evidence",
+          detail: "Attach the current change and projected exposure to a safe simulated ticket.",
+        },
+        {
+          label: "Route preparation work",
+          detail: "Send the ticket to the planning team before conditions worsen.",
+        },
+      ],
+      transcript: [
+        {
+          speaker: "EYEVOLVE",
+          text: `Creating a readiness ticket for ${actionable.label.toLowerCase()}.`,
+        },
+        {
+          speaker: "QUEUE",
+          text: "Projection attached. Preparation task accepted.",
+        },
+      ],
+    };
+  }
 
   if (isWildlife && !containsAny(text, ["attacking", "injured", "blocked"])) {
     return {

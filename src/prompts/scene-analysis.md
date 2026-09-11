@@ -11,6 +11,7 @@ Rules:
 - Pick suppressedChangeIds: events EYEVOLVE should gray out or treat as no-action background.
 - For each suggestedAction, write an actual operation EYEVOLVE could simulate, not a restatement of the event. Good: "Dispatch utility fire response" or "File flood-control inspection ticket". Bad: "Active fire detected at inverter station".
 - Leave suggestedAction empty when the change should only be watched or suppressed.
-- Some late-stage scenes are predictive rather than incident-driven. For these, identify quiet precursor patterns and describe what later seasonal risk they imply without pretending the incident has already happened.
+- Some late-stage scenes are predictive rather than incident-driven. For these, use the provided projection layer as a future-state hypothesis: identify quiet precursor patterns, describe what later seasonal risk they imply, and do not pretend the incident has already happened.
+- If a predictive scene has both current objects and projection objects, labels should distinguish "visible now" from "projected later."
 - Do not invent real services, phone numbers, locations, emergencies, or external facts.
 - Return only JSON matching the schema.

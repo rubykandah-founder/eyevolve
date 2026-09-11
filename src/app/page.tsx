@@ -41,6 +41,7 @@ import type {
   SceneDef,
   ScoredChange,
 } from "@/lib/types";
+import { FEATURE_KEYS } from "@/lib/types";
 
 const nowId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -61,10 +62,18 @@ const localProposal = (
   sanitizeProposal({
     proposedPolicyDeltas: {
       attention: {
-        humanSafety: interaction.actionChangeIds.length ? 0.02 : 0.005,
-        urgency: interaction.actionChangeIds.length ? 0.02 : 0.005,
-        infrastructure: 0.01,
-        environmental: 0,
+        humanSafety: interaction.actionChangeIds.length
+          ? 0.02
+          : interaction.potentialChangeIds?.length
+            ? 0.012
+            : 0.005,
+        urgency: interaction.actionChangeIds.length
+          ? 0.02
+          : interaction.potentialChangeIds?.length
+            ? 0.008
+            : 0.005,
+        infrastructure: interaction.potentialChangeIds?.length ? 0.014 : 0.01,
+        environmental: interaction.potentialChangeIds?.length ? 0.014 : 0,
         behavioral: 0,
         visualNoise:
           interaction.correctionReason === "Should have been ignored"
@@ -85,7 +94,9 @@ const localProposal = (
     },
     learnedRule: interaction.actionChangeIds.length
       ? "Action is reinforced when safety, urgency, and infrastructure signals align."
-      : "Detected changes can remain visible without becoming interventions.",
+      : interaction.potentialChangeIds?.length
+        ? "Benign-looking patterns can become watchlisted future risk without immediate intervention."
+        : "Detected changes can remain visible without becoming interventions.",
     nextLearningObjective:
       "Select the next observation from the highest remaining uncertainty.",
     nextScenarioType:
@@ -95,6 +106,32 @@ const localProposal = (
     reasoningSummary:
       "Local fallback generated conservative policy deltas and preserved the deterministic learning loop.",
   });
+
+const featurePhrase = (key: string) =>
+  key.replace(/([A-Z])/g, " $1").toLowerCase();
+
+const nextObservationFor = (
+  nextScene: SceneDef,
+  proposal: EvolutionProposal,
+) => {
+  const proposed = proposal.nextLearningObjective?.trim();
+  if (
+    proposed &&
+    !proposed.toLowerCase().includes("select the next observation")
+  ) {
+    return proposed;
+  }
+
+  const targets = FEATURE_KEYS.filter(
+    (key) => key !== "visualNoise" && nextScene.learningTargets[key] > 0.35,
+  )
+    .sort((a, b) => nextScene.learningTargets[b] - nextScene.learningTargets[a])
+    .slice(0, 2)
+    .map(featurePhrase);
+  const targetText = targets.length ? targets.join(" and ") : nextScene.scenarioType;
+
+  return `Next, EYEVOLVE will inspect ${nextScene.title} to test ${targetText}.`;
+};
 
 async function requestEvolution(
   policy: EyevolvePolicy,
@@ -180,6 +217,7 @@ async function requestSceneAnalysis(
 async function requestGenerationSummary(
   event: EvolutionEvent,
   scene: SceneDef,
+  nextScene: SceneDef,
   scoredBefore: ScoredChange[],
   scoredAfter: ScoredChange[],
   actionPlan: AutonomousActionPlan,
@@ -191,6 +229,12 @@ async function requestGenerationSummary(
       body: JSON.stringify({
         event,
         scene,
+        nextScene: {
+          id: nextScene.id,
+          title: nextScene.title,
+          scenarioType: nextScene.scenarioType,
+          learningTargets: nextScene.learningTargets,
+        },
         scoredBefore,
         scoredAfter,
         actionPlan,
@@ -213,6 +257,7 @@ export default function Home() {
   const [ranking, setRanking] = useState<string[]>([]);
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
   const [prioritizedChangeIds, setPrioritizedChangeIds] = useState<string[]>([]);
+  const [potentialChangeIds, setPotentialChangeIds] = useState<string[]>([]);
   const [ignoredChangeIds, setIgnoredChangeIds] = useState<string[]>([]);
   const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
   const [isCorrecting, setIsCorrecting] = useState(false);
@@ -396,6 +441,7 @@ export default function Home() {
     setRanking(scene.changes.map((change) => change.id));
     setSelectedActionIds([]);
     setPrioritizedChangeIds([]);
+    setPotentialChangeIds([]);
     setIgnoredChangeIds([]);
     setHoveredChangeId(null);
     setIsCorrecting(false);
@@ -411,34 +457,70 @@ export default function Home() {
   const rankWithJudgments = (
     current: string[],
     prioritized: string[],
+    potential: string[],
     ignored: string[],
   ) => {
     const sceneIds = scene.changes.map((change) => change.id);
     const sceneIdSet = new Set(sceneIds);
     const prioritySet = new Set(prioritized);
+    const potentialSet = new Set(potential);
     const ignoredSet = new Set(ignored);
     const validPrioritized = prioritized.filter((id) => sceneIdSet.has(id));
+    const validPotential = potential.filter((id) => sceneIdSet.has(id));
     const validIgnored = ignored.filter((id) => sceneIdSet.has(id));
     const neutral = current.filter(
-      (id) => sceneIdSet.has(id) && !prioritySet.has(id) && !ignoredSet.has(id),
+      (id) =>
+        sceneIdSet.has(id) &&
+        !prioritySet.has(id) &&
+        !potentialSet.has(id) &&
+        !ignoredSet.has(id),
     );
     const missingNeutral = sceneIds.filter(
       (id) =>
-        !current.includes(id) && !prioritySet.has(id) && !ignoredSet.has(id),
+        !current.includes(id) &&
+        !prioritySet.has(id) &&
+        !potentialSet.has(id) &&
+        !ignoredSet.has(id),
     );
 
-    return [...validPrioritized, ...neutral, ...missingNeutral, ...validIgnored];
+    return [
+      ...validPrioritized,
+      ...validPotential,
+      ...neutral,
+      ...missingNeutral,
+      ...validIgnored,
+    ];
   };
 
   const prioritizeChange = (changeId: string) => {
     const nextPrioritized = prioritizedChangeIds.includes(changeId)
       ? prioritizedChangeIds.filter((id) => id !== changeId)
       : [changeId, ...prioritizedChangeIds.filter((id) => id !== changeId)];
+    const nextPotential = potentialChangeIds.filter((id) => id !== changeId);
     const nextIgnored = ignoredChangeIds.filter((id) => id !== changeId);
 
     setPrioritizedChangeIds(nextPrioritized);
+    setPotentialChangeIds(nextPotential);
     setIgnoredChangeIds(nextIgnored);
-    setRanking((current) => rankWithJudgments(current, nextPrioritized, nextIgnored));
+    setRanking((current) =>
+      rankWithJudgments(current, nextPrioritized, nextPotential, nextIgnored),
+    );
+  };
+
+  const markPotentialChange = (changeId: string) => {
+    const nextPotential = potentialChangeIds.includes(changeId)
+      ? potentialChangeIds.filter((id) => id !== changeId)
+      : [changeId, ...potentialChangeIds.filter((id) => id !== changeId)];
+    const nextPrioritized = prioritizedChangeIds.filter((id) => id !== changeId);
+    const nextIgnored = ignoredChangeIds.filter((id) => id !== changeId);
+
+    setPotentialChangeIds(nextPotential);
+    setPrioritizedChangeIds(nextPrioritized);
+    setIgnoredChangeIds(nextIgnored);
+    setSelectedActionIds((current) => current.filter((id) => id !== changeId));
+    setRanking((current) =>
+      rankWithJudgments(current, nextPrioritized, nextPotential, nextIgnored),
+    );
   };
 
   const ignoreChange = (changeId: string) => {
@@ -446,11 +528,15 @@ export default function Home() {
       ? ignoredChangeIds.filter((id) => id !== changeId)
       : [...ignoredChangeIds.filter((id) => id !== changeId), changeId];
     const nextPrioritized = prioritizedChangeIds.filter((id) => id !== changeId);
+    const nextPotential = potentialChangeIds.filter((id) => id !== changeId);
 
     setPrioritizedChangeIds(nextPrioritized);
+    setPotentialChangeIds(nextPotential);
     setIgnoredChangeIds(nextIgnored);
     setSelectedActionIds((current) => current.filter((id) => id !== changeId));
-    setRanking((current) => rankWithJudgments(current, nextPrioritized, nextIgnored));
+    setRanking((current) =>
+      rankWithJudgments(current, nextPrioritized, nextPotential, nextIgnored),
+    );
   };
 
   const toggleAction = (changeId: string) => {
@@ -475,6 +561,7 @@ export default function Home() {
     setRevealedChangeIds([]);
     setIsPopulatingEvents(false);
     setPrioritizedChangeIds([]);
+    setPotentialChangeIds([]);
     setIgnoredChangeIds([]);
     setTileCycle((current) => current + 1);
   };
@@ -500,6 +587,7 @@ export default function Home() {
     kind: InteractionEvent["kind"],
     finalRanking: string[],
     finalActionIds: string[],
+    finalPotentialIds: string[] = [],
     reason?: string,
   ) => {
     if (isEvolving) {
@@ -552,6 +640,7 @@ export default function Home() {
       kind,
       ranking: finalRanking,
       actionChangeIds: finalActionIds,
+      potentialChangeIds: finalPotentialIds,
       correctionReason: reason,
       createdAt: new Date().toISOString(),
     };
@@ -584,7 +673,7 @@ export default function Home() {
       reasoningSummary: response.proposal.reasoningSummary,
       engine: response.engine,
       nextSceneId: nextScene.id,
-      nextLearningObjective: response.proposal.nextLearningObjective,
+      nextLearningObjective: nextObservationFor(nextScene, response.proposal),
       before,
       after: advancedPolicy,
       createdAt: new Date().toISOString(),
@@ -620,6 +709,7 @@ export default function Home() {
     void requestGenerationSummary(
       event,
       scene,
+      nextScene,
       scoredBefore,
       scoredAfter,
       summaryActionPlan,
@@ -673,13 +763,20 @@ export default function Home() {
   const acceptAi = () => {
     const finalRanking = scores.map((score) => score.id);
     const finalActionIds = scores
-      .filter((score) => score.actionRequired && !score.ignored)
+      .filter(
+        (score) =>
+          (score.actionRequired || Boolean(score.suggestedAction)) &&
+          !score.ignored,
+      )
       .map((score) => score.id);
     void completeEvolution("ai-agreement", finalRanking, finalActionIds);
   };
 
   const startCorrection = () => {
     setRanking(scores.map((score) => score.id));
+    setPrioritizedChangeIds([]);
+    setPotentialChangeIds([]);
+    setIgnoredChangeIds([]);
     setSelectedActionIds(
       scores
         .filter((score) => score.actionRequired && !score.ignored)
@@ -737,6 +834,7 @@ export default function Home() {
               ranking={ranking}
               selectedActionIds={selectedActionIds}
               prioritizedChangeIds={prioritizedChangeIds}
+              potentialChangeIds={potentialChangeIds}
               ignoredChangeIds={ignoredChangeIds}
               aiPrimaryChangeId={sceneAnalysis?.primaryChangeId}
               aiSuppressedChangeIds={sceneAnalysis?.suppressedChangeIds ?? []}
@@ -750,10 +848,16 @@ export default function Home() {
               actionsPaused={Boolean(transitionEvent)}
               onHoverChange={setHoveredChangeId}
               onPrioritizeChange={prioritizeChange}
+              onPotentialChange={markPotentialChange}
               onIgnoreChange={ignoreChange}
               onToggleAction={toggleAction}
               onSubmitHuman={() =>
-                void completeEvolution("human-training", ranking, selectedActionIds)
+                void completeEvolution(
+                  "human-training",
+                  ranking,
+                  selectedActionIds,
+                  potentialChangeIds,
+                )
               }
               onAcceptAi={acceptAi}
               onStartCorrection={startCorrection}
@@ -764,6 +868,7 @@ export default function Home() {
                   "ai-correction",
                   ranking,
                   selectedActionIds,
+                  potentialChangeIds,
                   correctionReason,
                 )
               }
@@ -772,8 +877,13 @@ export default function Home() {
                   "autonomous-action",
                   scores.map((score) => score.id),
                   scores
-                    .filter((score) => score.actionRequired && !score.ignored)
+                    .filter(
+                      (score) =>
+                        (score.actionRequired || Boolean(score.suggestedAction)) &&
+                        !score.ignored,
+                    )
                     .map((score) => score.id),
+                  [],
                 )
               }
             />

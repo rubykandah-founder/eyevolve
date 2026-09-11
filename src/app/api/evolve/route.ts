@@ -13,6 +13,7 @@ const scenarioTypes = [
   "flood",
   "wildlife",
   "industrial",
+  "seasonal-risk",
   "none",
 ] as const;
 
@@ -65,6 +66,7 @@ const proposalSchema = {
 
 const fallbackProposal = (request: EvolveRequest): EvolutionProposal => {
   const actionSelected = request.interaction.actionChangeIds.length > 0;
+  const potentialSelected = (request.interaction.potentialChangeIds?.length ?? 0) > 0;
   const correction = request.interaction.kind === "ai-correction";
   const topChangeId = request.interaction.ranking[0];
   const topChange = request.scene.changes.find((change) => change.id === topChangeId);
@@ -77,10 +79,10 @@ const fallbackProposal = (request: EvolveRequest): EvolutionProposal => {
   return {
     proposedPolicyDeltas: {
       attention: {
-        humanSafety: actionSelected ? 0.025 : 0.01,
-        urgency: actionSelected ? 0.025 : 0.01,
+        humanSafety: actionSelected ? 0.025 : potentialSelected ? 0.012 : 0.01,
+        urgency: actionSelected ? 0.025 : potentialSelected ? 0.006 : 0.01,
         infrastructure: topChange?.features.infrastructure ? 0.018 : 0,
-        environmental: topChange?.features.environmental ? 0.012 : 0,
+        environmental: topChange?.features.environmental || potentialSelected ? 0.012 : 0,
         behavioral: topChange?.features.behavioral ? 0.012 : 0,
         visualNoise: correction ? 0.018 : 0.01,
         wildlifeProximity: topChange?.features.wildlifeProximity ? 0.02 : 0,
@@ -97,7 +99,9 @@ const fallbackProposal = (request: EvolveRequest): EvolutionProposal => {
     },
     learnedRule: actionSelected
       ? `Intervention is favored when ${primarySignal} appears with urgency.`
-      : `Passive scene changes can be observed without immediate intervention.`,
+      : potentialSelected
+        ? `Potential risks should stay visible without becoming immediate interventions.`
+        : `Passive scene changes can be observed without immediate intervention.`,
     nextLearningObjective: "Probe the highest remaining uncertainty with another bounded observation.",
     nextScenarioType:
       request.policy.uncertaintyByDimension.wildlifeProximity > 0.65
@@ -176,7 +180,7 @@ export async function POST(request: Request) {
             role: "user",
             content: JSON.stringify({
               instruction:
-                "Interpret what the user interaction teaches EYEVOLVE. Propose tiny deltas only. Use 0 for dimensions that should not move. Suggest the next learning objective and scenario type from road, fire, flood, wildlife, industrial, or none.",
+                "Interpret what the user interaction teaches EYEVOLVE. Propose tiny deltas only. Use 0 for dimensions that should not move. Suggest the next learning objective and scenario type from road, fire, flood, wildlife, industrial, seasonal-risk, or none.",
               policy: body.policy,
               scene: {
                 id: body.scene.id,

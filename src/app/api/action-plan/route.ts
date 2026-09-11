@@ -274,6 +274,12 @@ export async function POST(request: Request) {
         scenarioType: body.scene.scenarioType,
         recommendedAction: body.scene.recommendedAction,
         actionService: body.scene.actionService,
+        projection: body.scene.projection
+          ? {
+              label: body.scene.projection.label,
+              description: body.scene.projection.description,
+            }
+          : null,
       },
       primaryChange: primary
         ? {

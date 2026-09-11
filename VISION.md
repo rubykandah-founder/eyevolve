@@ -43,7 +43,10 @@ Every generation becomes the baseline for the next generation.
 
 ## What Evolves
 
-EYEVOLVE does not rewrite its source code. For this prototype, evolution means:
+EYEVOLVE does not rewrite its source code. For this prototype, the designated
+self-changing subsystem is the operating policy that decides what to notice,
+what to suppress, what to do, and how much authority the interface should take.
+Evolution means:
 
 - Attention weights change what the system surfaces.
 - Action weights change what it recommends doing.

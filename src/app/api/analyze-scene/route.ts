@@ -215,6 +215,13 @@ export async function POST(request: Request) {
         scenarioType: body.scene.scenarioType,
         beforeObjects: body.scene.before.objects,
         afterObjects: body.scene.after.objects,
+        projection: body.scene.projection
+          ? {
+              label: body.scene.projection.label,
+              description: body.scene.projection.description,
+              objects: body.scene.projection.objects,
+            }
+          : null,
         candidateChanges: body.scene.changes,
       },
       currentScores: body.candidateScores.map((score) => ({

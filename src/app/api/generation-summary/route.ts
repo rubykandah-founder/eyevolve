@@ -178,6 +178,27 @@ const fallbackSummary = (body: GenerationSummaryRequest): GenerationSummary => {
     )
     .slice(0, 2)
     .map((key) => featureLabel(key).toLowerCase());
+  const nextSceneTargets = body.nextScene
+    ? FEATURE_KEYS.filter(
+        (key) => key !== "visualNoise" && body.nextScene!.learningTargets[key] > 0.35,
+      )
+        .sort(
+          (a, b) =>
+            body.nextScene!.learningTargets[b] -
+            body.nextScene!.learningTargets[a],
+        )
+        .slice(0, 2)
+        .map((key) => featureLabel(key).toLowerCase())
+    : [];
+  const nextObservation =
+    body.event.nextLearningObjective ??
+    (body.nextScene
+      ? `Next it will inspect ${body.nextScene.title} to test ${
+          nextSceneTargets.length
+            ? nextSceneTargets.join(" and ")
+            : body.nextScene.scenarioType
+        }.`
+      : `Next it will probe ${uncertain.join(" and ")} with another scene.`);
 
   return {
     headline: `Learned from ${body.event.sceneTitle}`,
@@ -201,9 +222,7 @@ const fallbackSummary = (body: GenerationSummaryRequest): GenerationSummary => {
         primary?.actionRequired
           ? `${primary.label} can drive a simulated ${body.actionPlan.label.toLowerCase()} action.`
           : "This scene can be monitored without outreach.",
-      nextObservation:
-        body.event.nextLearningObjective ??
-        `Next it will probe ${uncertain.join(" and ")} with another scene.`,
+      nextObservation,
     },
     mostImportantSignal: {
       label: primary?.label ?? "No urgent signal",
@@ -232,9 +251,7 @@ const fallbackSummary = (body: GenerationSummaryRequest): GenerationSummary => {
     understands: knowledge.known,
     stillLearning: knowledge.unsure,
     ruleCarriedForward: body.event.learnedRule,
-    nextObservation:
-      body.event.nextLearningObjective ??
-      `Next it will probe ${uncertain.join(" and ")} with another scene.`,
+    nextObservation,
   };
 };
 
@@ -354,7 +371,7 @@ export async function POST(request: Request) {
     schema: generationSummarySchema,
     input: {
       instruction:
-        "Write the generation-complete summary for this exact event. Explain the practical learning, not raw metrics.",
+        "Write the generation-complete summary for this exact event. Explain the practical learning, not raw metrics. The next-observation copy must refer to the provided nextScene and why EYEVOLVE chose it.",
       event: {
         generation: body.event.generation,
         sceneTitle: body.event.sceneTitle,
@@ -368,6 +385,14 @@ export async function POST(request: Request) {
         title: body.scene.title,
         scenarioType: body.scene.scenarioType,
       },
+      nextScene: body.nextScene
+        ? {
+            id: body.nextScene.id,
+            title: body.nextScene.title,
+            scenarioType: body.nextScene.scenarioType,
+            learningTargets: body.nextScene.learningTargets,
+          }
+        : null,
       scoredBefore: body.scoredBefore.map((change) => ({
         id: change.id,
         label: change.label,

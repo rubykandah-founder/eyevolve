@@ -66,6 +66,11 @@ export type SceneDef = {
   scenarioType: string;
   before: { objects: SceneObject[] };
   after: { objects: SceneObject[] };
+  projection?: {
+    label: string;
+    description: string;
+    objects: SceneObject[];
+  };
   changes: ChangeDef[];
   learningTargets: FeatureWeights;
   exposure: FeatureWeights;
@@ -104,6 +109,7 @@ export type InteractionEvent = {
   kind: "human-training" | "ai-agreement" | "ai-correction" | "autonomous-action";
   ranking: string[];
   actionChangeIds: string[];
+  potentialChangeIds?: string[];
   correctionReason?: string;
   createdAt: string;
 };
@@ -256,6 +262,7 @@ export type ActionPlanResponse = {
 export type GenerationSummaryRequest = {
   event: EvolutionEvent;
   scene: SceneDef;
+  nextScene?: Pick<SceneDef, "id" | "title" | "scenarioType" | "learningTargets">;
   scoredBefore: ScoredChange[];
   scoredAfter: ScoredChange[];
   actionPlan: AutonomousActionPlan;

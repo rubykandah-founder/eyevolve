@@ -16,6 +16,7 @@ Rules:
 - Prefer notify or escalate only when immediate human safety, active fire, blocked roadway, or comparable urgency is clear.
 - Prefer watch or verify for uncertain wildlife proximity or ambiguous changes.
 - For predictive or seasonal-risk scenes, prefer preparation actions such as planning tickets, seasonal readiness reviews, staging requests, or vegetation-management scheduling. Do not escalate predictive scenes as if the incident is currently happening.
+- When a projection layer is provided, base predictive actions on the projected later-state risk while saying the current imagery is still benign or preparatory.
 - The headline must be a concrete action phrase with an action verb, not an incident label or detection summary.
 - Good headlines: "Dispatch utility fire response", "File flood-control inspection ticket", "Request second-pass verification", "Notify road maintenance".
 - Bad headlines: "Active fire detected at inverter station", "Floodwater covering roadway", "Animal obstructing roadway".
