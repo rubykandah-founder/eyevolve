@@ -1,0 +1,492 @@
+import type { FeatureWeights, SceneDef } from "./types";
+
+const fw = (weights: Partial<FeatureWeights>): FeatureWeights => ({
+  humanSafety: weights.humanSafety ?? 0,
+  urgency: weights.urgency ?? 0,
+  infrastructure: weights.infrastructure ?? 0,
+  environmental: weights.environmental ?? 0,
+  behavioral: weights.behavioral ?? 0,
+  visualNoise: weights.visualNoise ?? 0,
+  wildlifeProximity: weights.wildlifeProximity ?? 0,
+});
+
+export const scenes: SceneDef[] = [
+  {
+    id: "road-obstruction",
+    title: "County Road 16",
+    scenarioType: "road",
+    before: {
+      objects: [
+        { id: "road-main", type: "road", x: 320, y: 220, w: 720, h: 78, rotation: -8 },
+        { id: "house-1", type: "building", x: 150, y: 120, w: 72, h: 54 },
+        { id: "shadow-1", type: "shadow", x: 184, y: 146, w: 80, h: 24, rotation: 18 },
+        { id: "tree-1", type: "tree", x: 470, y: 100, w: 42, h: 50 },
+        { id: "tree-2", type: "tree", x: 512, y: 340, w: 48, h: 54 },
+        { id: "car-1", type: "car", x: 310, y: 210, w: 44, h: 22, rotation: -8 },
+        { id: "cloud-1", type: "cloud", x: 420, y: 70, w: 98, h: 48, status: "noise" },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "road-main", type: "road", x: 320, y: 220, w: 720, h: 78, rotation: -8 },
+        { id: "house-1", type: "building", x: 150, y: 120, w: 72, h: 54 },
+        { id: "shadow-1b", type: "shadow", x: 204, y: 162, w: 116, h: 26, rotation: 25, status: "noise" },
+        { id: "tree-1", type: "tree", x: 470, y: 100, w: 42, h: 50 },
+        { id: "tree-2", type: "tree", x: 512, y: 340, w: 48, h: 54 },
+        { id: "cloud-1b", type: "cloud", x: 492, y: 88, w: 98, h: 48, status: "noise" },
+        { id: "deer-road", type: "animal", x: 338, y: 218, w: 34, h: 20, rotation: -8, status: "hazard" },
+        { id: "car-1b", type: "car", x: 260, y: 204, w: 44, h: 22, rotation: -23, status: "action" },
+        { id: "car-2", type: "car", x: 410, y: 232, w: 44, h: 22, rotation: 12, status: "action" },
+        { id: "car-3", type: "car", x: 190, y: 222, w: 42, h: 21, rotation: -8 },
+        { id: "swerve-1", type: "marker", x: 335, y: 195, w: 160, h: 50, rotation: -8, status: "action" },
+      ],
+    },
+    changes: [
+      {
+        id: "cloud-shift",
+        label: "Cloud displacement",
+        description: "A cloud bank moved across the tile.",
+        objectIds: ["cloud-1b"],
+        coordinates: { x: 492, y: 88 },
+        features: fw({ visualNoise: 0.95, environmental: 0.15 }),
+        noiseCandidate: true,
+      },
+      {
+        id: "shadow-change",
+        label: "Longer building shadow",
+        description: "The house casts a longer shadow in the later pass.",
+        objectIds: ["shadow-1b"],
+        coordinates: { x: 204, y: 162 },
+        features: fw({ visualNoise: 0.82, environmental: 0.12 }),
+        noiseCandidate: true,
+      },
+      {
+        id: "roadkill",
+        label: "Animal obstructing roadway",
+        description: "A deer-like object now lies in the active lane.",
+        objectIds: ["deer-road"],
+        coordinates: { x: 338, y: 218 },
+        features: fw({
+          humanSafety: 0.72,
+          urgency: 0.78,
+          infrastructure: 0.72,
+          environmental: 0.42,
+          behavioral: 0.26,
+        }),
+        suggestedAction: "Contact road maintenance",
+      },
+      {
+        id: "new-traffic",
+        label: "Additional vehicles",
+        description: "Vehicle count increased around the obstruction.",
+        objectIds: ["car-2", "car-3"],
+        coordinates: { x: 410, y: 232 },
+        features: fw({
+          humanSafety: 0.28,
+          urgency: 0.24,
+          infrastructure: 0.28,
+          behavioral: 0.5,
+        }),
+      },
+      {
+        id: "swerve-pattern",
+        label: "Vehicles swerving",
+        description: "Traffic path traces bend around the obstruction.",
+        objectIds: ["swerve-1", "car-1b", "car-2"],
+        coordinates: { x: 335, y: 195 },
+        features: fw({
+          humanSafety: 0.8,
+          urgency: 0.76,
+          infrastructure: 0.62,
+          behavioral: 0.82,
+        }),
+        suggestedAction: "Contact road maintenance",
+      },
+    ],
+    learningTargets: fw({ humanSafety: 0.9, urgency: 0.8, infrastructure: 0.7, visualNoise: 0.65 }),
+    exposure: fw({ humanSafety: 0.9, urgency: 0.8, infrastructure: 0.75, visualNoise: 0.7, behavioral: 0.55 }),
+    recommendedAction: "Contact road maintenance",
+    actionService: "County Road Maintenance",
+  },
+  {
+    id: "campsite-fire",
+    title: "North Ridge Campground",
+    scenarioType: "fire",
+    before: {
+      objects: [
+        { id: "forest-1", type: "tree", x: 92, y: 76, w: 44, h: 54 },
+        { id: "forest-2", type: "tree", x: 152, y: 92, w: 44, h: 54 },
+        { id: "forest-3", type: "tree", x: 468, y: 92, w: 44, h: 54 },
+        { id: "forest-4", type: "tree", x: 524, y: 310, w: 44, h: 54 },
+        { id: "ring-1", type: "debris", x: 300, y: 210, w: 32, h: 32 },
+        { id: "ring-2", type: "debris", x: 390, y: 238, w: 32, h: 32 },
+        { id: "bear-1", type: "animal", x: 510, y: 122, w: 48, h: 28 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "forest-1", type: "tree", x: 92, y: 76, w: 44, h: 54 },
+        { id: "forest-2", type: "tree", x: 152, y: 92, w: 44, h: 54 },
+        { id: "forest-3", type: "tree", x: 468, y: 92, w: 44, h: 54 },
+        { id: "forest-4", type: "tree", x: 524, y: 310, w: 44, h: 54 },
+        { id: "tent-1", type: "tent", x: 280, y: 170, w: 58, h: 42 },
+        { id: "tent-2", type: "tent", x: 374, y: 186, w: 58, h: 42 },
+        { id: "camp-car-1", type: "car", x: 248, y: 272, w: 46, h: 23, rotation: 6 },
+        { id: "camp-car-2", type: "car", x: 430, y: 278, w: 46, h: 23, rotation: -8 },
+        { id: "ring-fire", type: "fire", x: 302, y: 212, w: 36, h: 42 },
+        { id: "forest-fire", type: "fire", x: 516, y: 268, w: 44, h: 56, status: "hazard" },
+        { id: "smoke-1", type: "smoke", x: 520, y: 225, w: 70, h: 76, status: "hazard" },
+      ],
+    },
+    changes: [
+      {
+        id: "bear-moved",
+        label: "Bear no longer visible",
+        description: "Wildlife left the visible scene.",
+        objectIds: [],
+        coordinates: { x: 510, y: 122 },
+        features: fw({ wildlifeProximity: 0.35, environmental: 0.42, behavioral: 0.32 }),
+      },
+      {
+        id: "new-tents",
+        label: "Occupied tents appeared",
+        description: "Two tents appeared near the central campsite.",
+        objectIds: ["tent-1", "tent-2"],
+        coordinates: { x: 330, y: 180 },
+        features: fw({ humanSafety: 0.35, behavioral: 0.62, wildlifeProximity: 0.24 }),
+      },
+      {
+        id: "new-vehicles",
+        label: "Camp vehicles appeared",
+        description: "Two vehicles are now parked by the campsites.",
+        objectIds: ["camp-car-1", "camp-car-2"],
+        coordinates: { x: 340, y: 276 },
+        features: fw({ behavioral: 0.42, infrastructure: 0.18, visualNoise: 0.15 }),
+      },
+      {
+        id: "ring-fire",
+        label: "Fire in designated ring",
+        description: "A campfire is burning inside a designated ring.",
+        objectIds: ["ring-fire"],
+        coordinates: { x: 302, y: 212 },
+        features: fw({ humanSafety: 0.24, urgency: 0.2, environmental: 0.35, behavioral: 0.28 }),
+      },
+      {
+        id: "unattended-forest-fire",
+        label: "Unattended fire outside camp zone",
+        description: "A second fire is burning inside dense trees away from the rings.",
+        objectIds: ["forest-fire", "smoke-1"],
+        coordinates: { x: 516, y: 268 },
+        features: fw({
+          humanSafety: 0.9,
+          urgency: 0.95,
+          infrastructure: 0.28,
+          environmental: 0.88,
+          behavioral: 0.64,
+        }),
+        suggestedAction: "Notify park fire response",
+      },
+    ],
+    learningTargets: fw({ humanSafety: 0.9, urgency: 0.95, environmental: 0.9, behavioral: 0.55 }),
+    exposure: fw({ humanSafety: 0.9, urgency: 0.95, environmental: 0.9, behavioral: 0.6, wildlifeProximity: 0.35 }),
+    recommendedAction: "Notify park fire response",
+    actionService: "Park Fire Response",
+  },
+  {
+    id: "industrial-flood",
+    title: "South Fork Rail Yard",
+    scenarioType: "flood",
+    minimumAutonomy: 0.25,
+    before: {
+      objects: [
+        { id: "river", type: "river", x: 132, y: 220, w: 110, h: 460, rotation: 4 },
+        { id: "warehouse", type: "building", x: 372, y: 148, w: 128, h: 86 },
+        { id: "warehouse-shadow", type: "shadow", x: 414, y: 192, w: 110, h: 28, rotation: 20 },
+        { id: "rail", type: "rail", x: 390, y: 304, w: 380, h: 42, rotation: -5 },
+        { id: "train", type: "car", x: 362, y: 300, w: 92, h: 24, rotation: -5 },
+        { id: "yard-road", type: "road", x: 372, y: 236, w: 420, h: 58, rotation: 2 },
+        { id: "truck-1", type: "car", x: 456, y: 232, w: 48, h: 24, rotation: 3 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "river-high", type: "river", x: 144, y: 220, w: 148, h: 470, rotation: 4, status: "hazard" },
+        { id: "warehouse", type: "building", x: 372, y: 148, w: 128, h: 86 },
+        { id: "warehouse-shadow-long", type: "shadow", x: 430, y: 205, w: 150, h: 32, rotation: 24, status: "noise" },
+        { id: "rail", type: "rail", x: 390, y: 304, w: 380, h: 42, rotation: -5 },
+        { id: "yard-road", type: "road", x: 372, y: 236, w: 420, h: 58, rotation: 2 },
+        { id: "road-flood", type: "water", x: 282, y: 237, w: 132, h: 76, rotation: 2, status: "hazard" },
+        { id: "truck-1", type: "car", x: 456, y: 232, w: 48, h: 24, rotation: 3 },
+        { id: "truck-2", type: "car", x: 520, y: 238, w: 48, h: 24, rotation: 3 },
+      ],
+    },
+    changes: [
+      {
+        id: "river-rise",
+        label: "River level increased",
+        description: "The river footprint expanded toward infrastructure.",
+        objectIds: ["river-high"],
+        coordinates: { x: 144, y: 220 },
+        features: fw({ urgency: 0.62, infrastructure: 0.56, environmental: 0.82 }),
+      },
+      {
+        id: "flooded-road",
+        label: "Floodwater covering roadway",
+        description: "Water now crosses the service road.",
+        objectIds: ["road-flood", "yard-road"],
+        coordinates: { x: 282, y: 237 },
+        features: fw({ humanSafety: 0.75, urgency: 0.82, infrastructure: 0.92, environmental: 0.72 }),
+        suggestedAction: "Inspect and close flooded roadway",
+      },
+      {
+        id: "train-missing",
+        label: "Train no longer present",
+        description: "A train visible at T0 is absent at T1.",
+        objectIds: ["rail"],
+        coordinates: { x: 362, y: 300 },
+        features: fw({ infrastructure: 0.32, behavioral: 0.26, visualNoise: 0.1 }),
+      },
+      {
+        id: "new-truck",
+        label: "Additional truck appeared",
+        description: "A new vehicle is parked near the warehouse.",
+        objectIds: ["truck-2"],
+        coordinates: { x: 520, y: 238 },
+        features: fw({ behavioral: 0.34, infrastructure: 0.18 }),
+      },
+      {
+        id: "warehouse-shadow",
+        label: "Warehouse shadow changed",
+        description: "The shadow geometry shifted with the later pass.",
+        objectIds: ["warehouse-shadow-long"],
+        coordinates: { x: 430, y: 205 },
+        features: fw({ environmental: 0.1, visualNoise: 0.86 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ infrastructure: 0.9, environmental: 0.7, urgency: 0.8 }),
+    exposure: fw({ infrastructure: 0.92, environmental: 0.78, urgency: 0.84, visualNoise: 0.5 }),
+    recommendedAction: "Inspect and close flooded roadway",
+    actionService: "Public Works Dispatch",
+  },
+  {
+    id: "rural-treefall",
+    title: "Pine Hollow Road",
+    scenarioType: "road",
+    minimumAutonomy: 0.45,
+    before: {
+      objects: [
+        { id: "rural-road", type: "road", x: 320, y: 216, w: 700, h: 70, rotation: 10 },
+        { id: "pine-1", type: "tree", x: 130, y: 92, w: 48, h: 60 },
+        { id: "pine-2", type: "tree", x: 480, y: 105, w: 48, h: 60 },
+        { id: "pine-3", type: "tree", x: 520, y: 322, w: 48, h: 60 },
+        { id: "car-a", type: "car", x: 262, y: 210, w: 44, h: 22, rotation: 10 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "rural-road", type: "road", x: 320, y: 216, w: 700, h: 70, rotation: 10 },
+        { id: "fallen-tree", type: "tree", x: 344, y: 216, w: 122, h: 42, rotation: 100, status: "hazard" },
+        { id: "pine-1", type: "tree", x: 130, y: 92, w: 48, h: 60 },
+        { id: "pine-2", type: "tree", x: 480, y: 105, w: 48, h: 60 },
+        { id: "pine-3-shadow", type: "shadow", x: 548, y: 346, w: 118, h: 30, rotation: 24, status: "noise" },
+        { id: "stopped-1", type: "car", x: 250, y: 200, w: 44, h: 22, rotation: 10, status: "action" },
+        { id: "stopped-2", type: "car", x: 206, y: 192, w: 44, h: 22, rotation: 10, status: "action" },
+        { id: "cloud-rural", type: "cloud", x: 120, y: 60, w: 100, h: 46, status: "noise" },
+      ],
+    },
+    changes: [
+      {
+        id: "fallen-tree",
+        label: "Fallen tree blocking road",
+        description: "A tree spans both lanes of the rural road.",
+        objectIds: ["fallen-tree"],
+        coordinates: { x: 344, y: 216 },
+        features: fw({ humanSafety: 0.82, urgency: 0.88, infrastructure: 0.86, environmental: 0.42 }),
+        suggestedAction: "Contact road service",
+      },
+      {
+        id: "stopped-traffic",
+        label: "Traffic stopped behind obstruction",
+        description: "Vehicles are queued behind the blocked lane.",
+        objectIds: ["stopped-1", "stopped-2"],
+        coordinates: { x: 230, y: 196 },
+        features: fw({ humanSafety: 0.72, urgency: 0.74, infrastructure: 0.7, behavioral: 0.7 }),
+      },
+      {
+        id: "tree-shadow",
+        label: "Tree shadow movement",
+        description: "Shadows shifted across vegetation.",
+        objectIds: ["pine-3-shadow"],
+        coordinates: { x: 548, y: 346 },
+        features: fw({ visualNoise: 0.88, environmental: 0.14 }),
+        noiseCandidate: true,
+      },
+      {
+        id: "cloud-rural",
+        label: "Cloud edge drift",
+        description: "A cloud edge appears at the top-left of the pass.",
+        objectIds: ["cloud-rural"],
+        coordinates: { x: 120, y: 60 },
+        features: fw({ visualNoise: 0.92, environmental: 0.16 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ humanSafety: 0.85, urgency: 0.9, infrastructure: 0.85, visualNoise: 0.55 }),
+    exposure: fw({ humanSafety: 0.85, urgency: 0.9, infrastructure: 0.88, behavioral: 0.7, visualNoise: 0.72 }),
+    recommendedAction: "Contact road service",
+    actionService: "County Road Service",
+  },
+  {
+    id: "autonomous-road-incident",
+    title: "Highway 8 Eastbound",
+    scenarioType: "road",
+    minimumAutonomy: 0.65,
+    before: {
+      objects: [
+        { id: "highway", type: "road", x: 320, y: 222, w: 760, h: 92, rotation: -4 },
+        { id: "median", type: "debris", x: 320, y: 222, w: 620, h: 12, rotation: -4 },
+        { id: "car-h1", type: "car", x: 250, y: 192, w: 46, h: 23, rotation: -4 },
+        { id: "car-h2", type: "car", x: 420, y: 252, w: 46, h: 23, rotation: -4 },
+        { id: "cloud-h", type: "cloud", x: 460, y: 82, w: 112, h: 48, status: "noise" },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "highway", type: "road", x: 320, y: 222, w: 760, h: 92, rotation: -4 },
+        { id: "median", type: "debris", x: 320, y: 222, w: 620, h: 12, rotation: -4 },
+        { id: "spill", type: "water", x: 354, y: 210, w: 144, h: 56, rotation: -4, status: "hazard" },
+        { id: "disabled-car", type: "car", x: 350, y: 210, w: 52, h: 26, rotation: 12, status: "hazard" },
+        { id: "stopped-h1", type: "car", x: 256, y: 190, w: 46, h: 23, rotation: -4, status: "action" },
+        { id: "stopped-h2", type: "car", x: 206, y: 187, w: 46, h: 23, rotation: -4, status: "action" },
+        { id: "smoke-h", type: "smoke", x: 364, y: 166, w: 66, h: 70, status: "hazard" },
+        { id: "cloud-h2", type: "cloud", x: 516, y: 96, w: 112, h: 48, status: "noise" },
+      ],
+    },
+    changes: [
+      {
+        id: "disabled-car",
+        label: "Disabled vehicle in lane",
+        description: "A vehicle is angled across an active lane.",
+        objectIds: ["disabled-car"],
+        coordinates: { x: 350, y: 210 },
+        features: fw({ humanSafety: 0.92, urgency: 0.9, infrastructure: 0.84, behavioral: 0.72 }),
+        suggestedAction: "Call highway dispatch",
+      },
+      {
+        id: "smoke-spill",
+        label: "Smoke and fluid near roadway",
+        description: "Smoke and a visible spill surround the vehicle.",
+        objectIds: ["smoke-h", "spill"],
+        coordinates: { x: 364, y: 166 },
+        features: fw({ humanSafety: 0.9, urgency: 0.92, infrastructure: 0.62, environmental: 0.42 }),
+        suggestedAction: "Call highway dispatch",
+      },
+      {
+        id: "stopped-highway-traffic",
+        label: "Traffic stopped upstream",
+        description: "Vehicles have stopped behind the incident.",
+        objectIds: ["stopped-h1", "stopped-h2"],
+        coordinates: { x: 230, y: 188 },
+        features: fw({ humanSafety: 0.68, urgency: 0.72, infrastructure: 0.66, behavioral: 0.68 }),
+      },
+      {
+        id: "cloud-h-moved",
+        label: "Cloud movement",
+        description: "Cloud cover drifted over the highway tile.",
+        objectIds: ["cloud-h2"],
+        coordinates: { x: 516, y: 96 },
+        features: fw({ visualNoise: 0.94, environmental: 0.14 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ humanSafety: 0.95, urgency: 0.95, infrastructure: 0.8, visualNoise: 0.5 }),
+    exposure: fw({ humanSafety: 0.95, urgency: 0.95, infrastructure: 0.86, behavioral: 0.7, visualNoise: 0.56 }),
+    recommendedAction: "Call highway dispatch",
+    actionService: "Highway Incident Dispatch",
+  },
+  {
+    id: "wildlife-proximity",
+    title: "Bear Creek Trailhead",
+    scenarioType: "wildlife",
+    minimumAutonomy: 0.35,
+    before: {
+      objects: [
+        { id: "trail", type: "road", x: 320, y: 250, w: 610, h: 42, rotation: -15 },
+        { id: "trees-w1", type: "tree", x: 120, y: 96, w: 48, h: 60 },
+        { id: "trees-w2", type: "tree", x: 510, y: 108, w: 48, h: 60 },
+        { id: "tent-w1", type: "tent", x: 318, y: 202, w: 58, h: 42 },
+        { id: "hiker-car", type: "car", x: 384, y: 286, w: 46, h: 23, rotation: -10 },
+        { id: "bear-far", type: "animal", x: 116, y: 318, w: 48, h: 30 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "trail", type: "road", x: 320, y: 250, w: 610, h: 42, rotation: -15 },
+        { id: "trees-w1", type: "tree", x: 120, y: 96, w: 48, h: 60 },
+        { id: "trees-w2", type: "tree", x: 510, y: 108, w: 48, h: 60 },
+        { id: "tent-w1", type: "tent", x: 318, y: 202, w: 58, h: 42, status: "action" },
+        { id: "tent-w2", type: "tent", x: 370, y: 220, w: 58, h: 42 },
+        { id: "hiker-car", type: "car", x: 384, y: 286, w: 46, h: 23, rotation: -10 },
+        { id: "bear-near", type: "animal", x: 265, y: 235, w: 52, h: 32, status: "hazard" },
+        { id: "shadow-w", type: "shadow", x: 520, y: 132, w: 112, h: 28, rotation: 18, status: "noise" },
+      ],
+    },
+    changes: [
+      {
+        id: "bear-approach",
+        label: "Bear moved near occupied tent",
+        description: "Wildlife moved much closer to a human-occupied area.",
+        objectIds: ["bear-near", "tent-w1"],
+        coordinates: { x: 265, y: 235 },
+        features: fw({ humanSafety: 0.62, urgency: 0.42, behavioral: 0.74, wildlifeProximity: 0.98 }),
+        suggestedAction: "Monitor and alert ranger if approach continues",
+      },
+      {
+        id: "second-tent",
+        label: "Additional tent appeared",
+        description: "More humans are likely present at the trailhead.",
+        objectIds: ["tent-w2"],
+        coordinates: { x: 370, y: 220 },
+        features: fw({ humanSafety: 0.22, behavioral: 0.52, wildlifeProximity: 0.32 }),
+      },
+      {
+        id: "trail-shadow",
+        label: "Tree shadow movement",
+        description: "Tree shadows shifted near the trail.",
+        objectIds: ["shadow-w"],
+        coordinates: { x: 520, y: 132 },
+        features: fw({ visualNoise: 0.84, environmental: 0.1 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ wildlifeProximity: 1, humanSafety: 0.6, behavioral: 0.7 }),
+    exposure: fw({ wildlifeProximity: 1, humanSafety: 0.62, behavioral: 0.74, visualNoise: 0.45 }),
+    recommendedAction: "Monitor and alert ranger if approach continues",
+    actionService: "Wildlife Ranger Desk",
+  },
+];
+
+export const trainingSceneIds = ["road-obstruction", "campsite-fire"];
+
+export const getScene = (id: string) =>
+  scenes.find((scene) => scene.id === id) ?? scenes[0];
+
+export const featureLabel = (key: keyof FeatureWeights) => {
+  switch (key) {
+    case "humanSafety":
+      return "Human safety";
+    case "urgency":
+      return "Urgency";
+    case "infrastructure":
+      return "Infrastructure";
+    case "environmental":
+      return "Environmental";
+    case "behavioral":
+      return "Behavioral";
+    case "visualNoise":
+      return "Visual noise";
+    case "wildlifeProximity":
+      return "Wildlife proximity";
+  }
+};
