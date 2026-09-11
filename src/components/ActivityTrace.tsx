@@ -50,9 +50,10 @@ export function ActivityTrace({ mode, scores, isEvolving }: ActivityTraceProps) 
   ];
 
   return (
-    <section className="panel">
-      <div className="panel-title">
-        <h3>EYEVOLVE activity</h3>
+    <section className="activity-path" aria-label="EYEVOLVE status path">
+      <div className="activity-path-title">
+        <span className="eyebrow">Status path</span>
+        <strong>EYEVOLVE activity</strong>
       </div>
       <div className="activity-list">
         {steps.map((step) => (

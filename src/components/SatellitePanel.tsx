@@ -6,12 +6,16 @@ type SatellitePanelProps = {
   scene: SceneDef;
   phase: "before" | "after";
   highlightedObjectIds: string[];
+  onTilesComplete?: (phase: "before" | "after") => void;
+  tileSceneKey?: string;
 };
 
 export function SatellitePanel({
   scene,
   phase,
   highlightedObjectIds,
+  onTilesComplete,
+  tileSceneKey,
 }: SatellitePanelProps) {
   const objects = phase === "before" ? scene.before.objects : scene.after.objects;
 
@@ -22,7 +26,11 @@ export function SatellitePanel({
         <span className="panel-badge">{scene.title}</span>
       </div>
       <SceneRenderer objects={objects} highlightedObjectIds={highlightedObjectIds} />
-      <TileReveal sceneId={scene.id} phase={phase} />
+      <TileReveal
+        sceneId={tileSceneKey ?? scene.id}
+        phase={phase}
+        onComplete={onTilesComplete}
+      />
     </section>
   );
 }

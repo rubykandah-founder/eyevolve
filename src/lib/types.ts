@@ -18,6 +18,8 @@ export type AutonomyMode =
   | "exception-management"
   | "autonomous";
 
+export type AiEngine = "openai" | "local";
+
 export type ObjectType =
   | "road"
   | "river"
@@ -64,6 +66,11 @@ export type SceneDef = {
   scenarioType: string;
   before: { objects: SceneObject[] };
   after: { objects: SceneObject[] };
+  projection?: {
+    label: string;
+    description: string;
+    objects: SceneObject[];
+  };
   changes: ChangeDef[];
   learningTargets: FeatureWeights;
   exposure: FeatureWeights;
@@ -77,6 +84,22 @@ export type LearnedRule = {
   generation: number;
   text: string;
   source: "local" | "openai";
+};
+
+export type SourceEvolutionRule = {
+  id: string;
+  generation: number;
+  title: string;
+  when: string;
+  then: string;
+  source: AiEngine;
+};
+
+export type SourceEvolutionSnapshot = {
+  version: number;
+  updatedAt: string;
+  summary: string;
+  rules: SourceEvolutionRule[];
 };
 
 export type EyevolvePolicy = {
@@ -102,8 +125,62 @@ export type InteractionEvent = {
   kind: "human-training" | "ai-agreement" | "ai-correction" | "autonomous-action";
   ranking: string[];
   actionChangeIds: string[];
+  potentialChangeIds?: string[];
   correctionReason?: string;
   createdAt: string;
+};
+
+export type AutonomousActionKind =
+  | "suppress"
+  | "watch"
+  | "verify"
+  | "ticket"
+  | "notify"
+  | "escalate";
+
+export type AutonomousActionPlan = {
+  kind: AutonomousActionKind;
+  label: string;
+  headline: string;
+  description: string;
+  receiverLabel: string;
+  receiverRole: string;
+  bridgeLabel: string;
+  artifactLabel?: string;
+  artifactValue?: string;
+  artifactNote?: string;
+  stateLabel: string;
+  completeLabel: string;
+  transcript: { speaker: string; text: string }[];
+  steps: { label: string; detail: string }[];
+};
+
+export type GenerationSummary = {
+  headline: string;
+  lede: string;
+  compactOverlay: {
+    headline: string;
+    takeaway: string;
+    prioritize: { label: string; reason: string };
+    quietDown?: { label: string; reason: string };
+    behaviorChange: string;
+    nextObservation: string;
+  };
+  mostImportantSignal: {
+    label: string;
+    description: string;
+    action: string;
+  };
+  usedToThink: string;
+  nowThinks: string;
+  capabilityTitle: string;
+  capabilityDescription: string;
+  notCritical: { label: string; reason: string }[];
+  keepWatching: { label: string; reason: string }[];
+  understands: string[];
+  stillLearning: string[];
+  ruleCarriedForward: string;
+  nextObservation: string;
 };
 
 export type EvolutionEvent = {
@@ -117,6 +194,8 @@ export type EvolutionEvent = {
   engine: "openai" | "local";
   nextSceneId: string;
   nextLearningObjective?: string;
+  summaryNarrative?: GenerationSummary;
+  summaryEngine?: AiEngine;
   before: EyevolvePolicy;
   after: EyevolvePolicy;
   createdAt: string;
@@ -161,5 +240,67 @@ export type EvolveRequest = {
 
 export type EvolveResponse = {
   proposal: EvolutionProposal;
-  engine: "openai" | "local";
+  engine: AiEngine;
+};
+
+export type SceneAnalysis = {
+  changes: ChangeDef[];
+  primaryChangeId: string;
+  suppressedChangeIds: string[];
+  reasoningSummary: string;
+};
+
+export type SceneAnalysisRequest = {
+  scene: SceneDef;
+  policy: EyevolvePolicy;
+  candidateScores: ScoredChange[];
+  recentHistory: string[];
+};
+
+export type SceneAnalysisResponse = {
+  analysis: SceneAnalysis;
+  engine: AiEngine;
+};
+
+export type ActionPlanRequest = {
+  scene: SceneDef;
+  policy: EyevolvePolicy;
+  scores: ScoredChange[];
+  primaryChangeId?: string;
+  mode: AutonomyMode;
+};
+
+export type ActionPlanResponse = {
+  plan: AutonomousActionPlan;
+  engine: AiEngine;
+};
+
+export type GenerationSummaryRequest = {
+  event: EvolutionEvent;
+  scene: SceneDef;
+  nextScene?: Pick<SceneDef, "id" | "title" | "scenarioType" | "learningTargets">;
+  scoredBefore: ScoredChange[];
+  scoredAfter: ScoredChange[];
+  actionPlan: AutonomousActionPlan;
+};
+
+export type GenerationSummaryResponse = {
+  summary: GenerationSummary;
+  engine: AiEngine;
+};
+
+export type SourceEvolutionRequest = {
+  event: EvolutionEvent;
+  state: EyevolveState;
+  scene: SceneDef;
+};
+
+export type SourceEvolutionResponse = {
+  engine: AiEngine;
+  filePath: string;
+  summary: string;
+  beforeSource: string;
+  afterSource: string;
+  diff: string;
+  snapshot: SourceEvolutionSnapshot;
 };
