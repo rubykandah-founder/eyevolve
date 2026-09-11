@@ -729,6 +729,151 @@ export const scenes: SceneDef[] = [
     recommendedAction: "Dispatch utility response",
     actionService: "Utility Operations Center",
   },
+  {
+    id: "seasonal-flood-forecast",
+    title: "Upper Basin Reservoir",
+    scenarioType: "flood",
+    minimumAutonomy: 0.72,
+    before: {
+      objects: [
+        { id: "basin-river", type: "river", x: 152, y: 220, w: 104, h: 440, rotation: -8 },
+        { id: "reservoir-road", type: "road", x: 386, y: 300, w: 430, h: 46, rotation: -4 },
+        { id: "reservoir-dam", type: "building", x: 356, y: 210, w: 128, h: 42, rotation: -4 },
+        { id: "valley-town", type: "building", x: 484, y: 326, w: 110, h: 66 },
+        { id: "snowpack-a", type: "water", x: 272, y: 92, w: 126, h: 58, rotation: -12 },
+        { id: "snowpack-b", type: "water", x: 408, y: 82, w: 92, h: 42, rotation: 8 },
+        { id: "basin-tree-1", type: "tree", x: 526, y: 122, w: 48, h: 58 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "basin-river", type: "river", x: 152, y: 220, w: 104, h: 440, rotation: -8 },
+        { id: "reservoir-road", type: "road", x: 386, y: 300, w: 430, h: 46, rotation: -4 },
+        { id: "reservoir-dam", type: "building", x: 356, y: 210, w: 128, h: 42, rotation: -4, status: "action" },
+        { id: "valley-town", type: "building", x: 484, y: 326, w: 110, h: 66, status: "action" },
+        { id: "snowpack-a-high", type: "water", x: 282, y: 92, w: 164, h: 72, rotation: -12, status: "hazard" },
+        { id: "snowpack-b-high", type: "water", x: 428, y: 82, w: 122, h: 52, rotation: 8, status: "hazard" },
+        { id: "reservoir-margin", type: "water", x: 272, y: 204, w: 118, h: 44, rotation: -8, status: "action" },
+        { id: "basin-tree-1", type: "tree", x: 526, y: 122, w: 48, h: 58 },
+        { id: "basin-cloud", type: "cloud", x: 560, y: 72, w: 96, h: 46, status: "noise" },
+      ],
+    },
+    changes: [
+      {
+        id: "snowpack-surplus",
+        label: "Heavy upper-basin snowpack",
+        description:
+          "Snowpack expanded above the reservoir. The scene is calm now, but melt season could push flood-control capacity.",
+        objectIds: ["snowpack-a-high", "snowpack-b-high", "reservoir-dam"],
+        coordinates: { x: 336, y: 92 },
+        features: fw({ infrastructure: 0.72, environmental: 0.92, urgency: 0.5, humanSafety: 0.36 }),
+        suggestedAction: "Open seasonal flood-readiness ticket",
+      },
+      {
+        id: "reservoir-margin-rise",
+        label: "Reservoir margin slightly higher",
+        description:
+          "Water is marginally closer to the dam control zone, strengthening the seasonal flood projection.",
+        objectIds: ["reservoir-margin", "reservoir-dam"],
+        coordinates: { x: 272, y: 204 },
+        features: fw({ infrastructure: 0.7, environmental: 0.72, urgency: 0.42 }),
+      },
+      {
+        id: "downstream-exposure",
+        label: "Downstream community in drainage path",
+        description:
+          "A populated area sits below the basin. It is not impacted now, but it changes the preparation priority.",
+        objectIds: ["valley-town", "basin-river"],
+        coordinates: { x: 484, y: 326 },
+        features: fw({ humanSafety: 0.5, infrastructure: 0.58, environmental: 0.38 }),
+      },
+      {
+        id: "basin-cloud-drift",
+        label: "Cloud drift over ridge",
+        description: "Cloud cover shifted near the ridge line.",
+        objectIds: ["basin-cloud"],
+        coordinates: { x: 560, y: 72 },
+        features: fw({ visualNoise: 0.9, environmental: 0.12 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ environmental: 0.95, infrastructure: 0.76, humanSafety: 0.48, urgency: 0.5 }),
+    exposure: fw({ environmental: 0.95, infrastructure: 0.76, humanSafety: 0.5, urgency: 0.5, visualNoise: 0.42 }),
+    recommendedAction: "Open seasonal flood-readiness ticket",
+    actionService: "Flood Control Planning",
+  },
+  {
+    id: "fuel-load-forecast",
+    title: "Foothill Power Corridor",
+    scenarioType: "seasonal-risk",
+    minimumAutonomy: 0.76,
+    before: {
+      objects: [
+        { id: "corridor-road", type: "road", x: 322, y: 318, w: 580, h: 42, rotation: -7 },
+        { id: "power-line", type: "rail", x: 336, y: 198, w: 430, h: 34, rotation: -7 },
+        { id: "substation", type: "building", x: 470, y: 272, w: 88, h: 62 },
+        { id: "fuel-tree-a", type: "tree", x: 184, y: 152, w: 46, h: 58 },
+        { id: "fuel-tree-b", type: "tree", x: 258, y: 180, w: 48, h: 58 },
+        { id: "fuel-tree-c", type: "tree", x: 360, y: 142, w: 48, h: 58 },
+        { id: "utility-truck-a", type: "car", x: 414, y: 316, w: 46, h: 23, rotation: -7 },
+      ],
+    },
+    after: {
+      objects: [
+        { id: "corridor-road", type: "road", x: 322, y: 318, w: 580, h: 42, rotation: -7 },
+        { id: "power-line", type: "rail", x: 336, y: 198, w: 430, h: 34, rotation: -7, status: "action" },
+        { id: "substation", type: "building", x: 470, y: 272, w: 88, h: 62, status: "action" },
+        { id: "dry-brush-a", type: "debris", x: 206, y: 180, w: 96, h: 36, rotation: -12, status: "hazard" },
+        { id: "dry-brush-b", type: "debris", x: 320, y: 162, w: 120, h: 40, rotation: 8, status: "hazard" },
+        { id: "dry-tree-c", type: "tree", x: 370, y: 142, w: 48, h: 58, status: "hazard" },
+        { id: "utility-truck-b", type: "car", x: 430, y: 316, w: 46, h: 23, rotation: -7 },
+        { id: "ridge-shadow", type: "shadow", x: 514, y: 120, w: 142, h: 28, rotation: 10, status: "noise" },
+      ],
+    },
+    changes: [
+      {
+        id: "dry-fuel-buildup",
+        label: "Dry fuel buildup near utility corridor",
+        description:
+          "Vegetation around the corridor appears drier and denser. It is benign today, but raises seasonal ignition exposure.",
+        objectIds: ["dry-brush-a", "dry-brush-b", "dry-tree-c", "power-line"],
+        coordinates: { x: 300, y: 168 },
+        features: fw({ environmental: 0.9, infrastructure: 0.78, urgency: 0.48, humanSafety: 0.34 }),
+        suggestedAction: "Schedule vegetation-management readiness review",
+      },
+      {
+        id: "substation-exposure",
+        label: "Substation within projected exposure area",
+        description:
+          "The utility asset is close to the dry fuel band, making preparation more actionable than simple monitoring.",
+        objectIds: ["substation", "dry-brush-b"],
+        coordinates: { x: 470, y: 272 },
+        features: fw({ infrastructure: 0.82, environmental: 0.62, urgency: 0.42 }),
+      },
+      {
+        id: "service-road-clear",
+        label: "Access road still clear",
+        description:
+          "The access road remains passable, which means crews can prepare before conditions worsen.",
+        objectIds: ["corridor-road", "utility-truck-b"],
+        coordinates: { x: 430, y: 316 },
+        features: fw({ infrastructure: 0.44, behavioral: 0.42, urgency: 0.2 }),
+      },
+      {
+        id: "ridge-shadow-shift",
+        label: "Ridge shadow shifted",
+        description: "A ridge shadow moved between passes.",
+        objectIds: ["ridge-shadow"],
+        coordinates: { x: 514, y: 120 },
+        features: fw({ visualNoise: 0.86, environmental: 0.1 }),
+        noiseCandidate: true,
+      },
+    ],
+    learningTargets: fw({ environmental: 0.92, infrastructure: 0.82, urgency: 0.46, behavioral: 0.42 }),
+    exposure: fw({ environmental: 0.92, infrastructure: 0.82, urgency: 0.48, humanSafety: 0.36, behavioral: 0.42, visualNoise: 0.44 }),
+    recommendedAction: "Schedule vegetation-management readiness review",
+    actionService: "Vegetation Management Planning",
+  },
 ];
 
 export const trainingSceneIds = ["road-obstruction", "campsite-fire"];

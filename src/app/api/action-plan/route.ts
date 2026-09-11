@@ -90,6 +90,100 @@ const cleanText = (value: unknown, fallback: string, maxLength: number) =>
     ? value.trim().slice(0, maxLength)
     : fallback.slice(0, maxLength);
 
+const actionVerbs = [
+  "alert",
+  "call",
+  "contact",
+  "create",
+  "dispatch",
+  "escalate",
+  "file",
+  "inspect",
+  "isolate",
+  "monitor",
+  "notify",
+  "open",
+  "prepare",
+  "request",
+  "route",
+  "schedule",
+  "send",
+  "stage",
+  "suppress",
+  "verify",
+  "watch",
+];
+
+const normalizeText = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const startsWithActionVerb = (value: string) => {
+  const normalized = normalizeText(value);
+  return actionVerbs.some((verb) => normalized === verb || normalized.startsWith(`${verb} `));
+};
+
+const actionHeadlineFallback = (
+  kind: AutonomousActionKind,
+  body: ActionPlanRequest,
+  primary: ScoredChange | undefined,
+  fallback: AutonomousActionPlan,
+) => {
+  const candidates = [
+    primary?.suggestedAction,
+    body.scene.recommendedAction,
+    fallback.headline,
+  ].filter((candidate): candidate is string => Boolean(candidate?.trim()));
+
+  const command = candidates.find(startsWithActionVerb);
+  if (command) {
+    return command;
+  }
+
+  const service = body.scene.actionService ?? fallback.receiverLabel ?? "service desk";
+  switch (kind) {
+    case "ticket":
+      return `File ${service} ticket`;
+    case "notify":
+      return `Notify ${service}`;
+    case "escalate":
+      return `Escalate to ${service}`;
+    case "verify":
+      return "Request second-pass verification";
+    case "watch":
+      return "Monitor for the next pass";
+    case "suppress":
+      return "Suppress as background change";
+  }
+};
+
+const repairActionHeadline = (
+  headline: string,
+  kind: AutonomousActionKind,
+  body: ActionPlanRequest,
+  primary: ScoredChange | undefined,
+  fallback: AutonomousActionPlan,
+) => {
+  const normalizedHeadline = normalizeText(headline);
+  const eventTexts = [primary?.label, primary?.description]
+    .filter((text): text is string => Boolean(text?.trim()))
+    .map(normalizeText);
+  const repeatsEvent = eventTexts.some(
+    (eventText) =>
+      normalizedHeadline === eventText ||
+      eventText.startsWith(normalizedHeadline) ||
+      normalizedHeadline.startsWith(eventText),
+  );
+
+  if (startsWithActionVerb(headline) && !repeatsEvent) {
+    return headline;
+  }
+
+  return actionHeadlineFallback(kind, body, primary, fallback).slice(0, 80);
+};
+
+const repairActionLabel = (label: string, fallback: AutonomousActionPlan) =>
+  startsWithActionVerb(label) ? label : fallback.label;
+
 const fallbackPlan = (body: ActionPlanRequest) => {
   const primary = choosePrimary(body);
   return selectAutonomousActionPlan(body.scene, primary);
@@ -103,6 +197,8 @@ const choosePrimary = (body: ActionPlanRequest): ScoredChange | undefined =>
 const validatePlan = (
   value: unknown,
   fallback: AutonomousActionPlan,
+  body: ActionPlanRequest,
+  primary: ScoredChange | undefined,
 ): AutonomousActionPlan | null => {
   if (!isRecord(value) || typeof value.kind !== "string") {
     return null;
@@ -134,10 +230,12 @@ const validatePlan = (
     return null;
   }
 
+  const rawHeadline = cleanText(value.headline, fallback.headline, 80);
+
   return {
     kind,
-    label: cleanText(value.label, fallback.label, 32),
-    headline: cleanText(value.headline, fallback.headline, 80),
+    label: repairActionLabel(cleanText(value.label, fallback.label, 32), fallback),
+    headline: repairActionHeadline(rawHeadline, kind, body, primary, fallback),
     description: cleanText(value.description, fallback.description, 220),
     receiverLabel: cleanText(value.receiverLabel, fallback.receiverLabel, 80),
     receiverRole: cleanText(value.receiverRole, fallback.receiverRole, 80),
@@ -205,7 +303,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan: fallback, engine: "local" });
   }
 
-  const plan = validatePlan(parsed, fallback);
+  const plan = validatePlan(parsed, fallback, body, primary);
   if (!plan) {
     return NextResponse.json({ plan: fallback, engine: "local" });
   }

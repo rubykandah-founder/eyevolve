@@ -136,6 +136,14 @@ export type AutonomousActionPlan = {
 export type GenerationSummary = {
   headline: string;
   lede: string;
+  compactOverlay: {
+    headline: string;
+    takeaway: string;
+    prioritize: { label: string; reason: string };
+    quietDown?: { label: string; reason: string };
+    behaviorChange: string;
+    nextObservation: string;
+  };
   mostImportantSignal: {
     label: string;
     description: string;

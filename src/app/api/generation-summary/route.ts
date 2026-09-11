@@ -30,6 +30,7 @@ const generationSummarySchema = {
   required: [
     "headline",
     "lede",
+    "compactOverlay",
     "mostImportantSignal",
     "usedToThink",
     "nowThinks",
@@ -45,6 +46,26 @@ const generationSummarySchema = {
   properties: {
     headline: { type: "string", maxLength: 90 },
     lede: { type: "string", maxLength: 180 },
+    compactOverlay: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "headline",
+        "takeaway",
+        "prioritize",
+        "quietDown",
+        "behaviorChange",
+        "nextObservation",
+      ],
+      properties: {
+        headline: { type: "string", maxLength: 72 },
+        takeaway: { type: "string", maxLength: 150 },
+        prioritize: summaryItemSchema,
+        quietDown: summaryItemSchema,
+        behaviorChange: { type: "string", maxLength: 150 },
+        nextObservation: { type: "string", maxLength: 140 },
+      },
+    },
     mostImportantSignal: {
       type: "object",
       additionalProperties: false,
@@ -162,6 +183,28 @@ const fallbackSummary = (body: GenerationSummaryRequest): GenerationSummary => {
     headline: `Learned from ${body.event.sceneTitle}`,
     lede:
       "EYEVOLVE updated what deserves action and what can stay in the background.",
+    compactOverlay: {
+      headline: `Learned from ${body.event.sceneTitle}`,
+      takeaway:
+        "EYEVOLVE updated what deserves action and what can stay quiet.",
+      prioritize: {
+        label: primary?.label ?? "No urgent signal",
+        reason:
+          primary?.description ??
+          "No change clearly crossed the current action threshold.",
+      },
+      quietDown: background[0] ?? {
+        label: "No obvious noise",
+        reason: "Nothing was clearly safe to suppress in this pass.",
+      },
+      behaviorChange:
+        primary?.actionRequired
+          ? `${primary.label} can drive a simulated ${body.actionPlan.label.toLowerCase()} action.`
+          : "This scene can be monitored without outreach.",
+      nextObservation:
+        body.event.nextLearningObjective ??
+        `Next it will probe ${uncertain.join(" and ")} with another scene.`,
+    },
     mostImportantSignal: {
       label: primary?.label ?? "No urgent signal",
       description:
@@ -206,6 +249,59 @@ const validateSummary = (
   return {
     headline: cleanText(value.headline, fallback.headline, 90),
     lede: cleanText(value.lede, fallback.lede, 180),
+    compactOverlay: isRecord(value.compactOverlay)
+      ? {
+          headline: cleanText(
+            value.compactOverlay.headline,
+            fallback.compactOverlay.headline,
+            72,
+          ),
+          takeaway: cleanText(
+            value.compactOverlay.takeaway,
+            fallback.compactOverlay.takeaway,
+            150,
+          ),
+          prioritize: isRecord(value.compactOverlay.prioritize)
+            ? {
+                label: cleanText(
+                  value.compactOverlay.prioritize.label,
+                  fallback.compactOverlay.prioritize.label,
+                  80,
+                ),
+                reason: cleanText(
+                  value.compactOverlay.prioritize.reason,
+                  fallback.compactOverlay.prioritize.reason,
+                  120,
+                ),
+              }
+            : fallback.compactOverlay.prioritize,
+          quietDown: isRecord(value.compactOverlay.quietDown)
+            ? {
+                label: cleanText(
+                  value.compactOverlay.quietDown.label,
+                  fallback.compactOverlay.quietDown?.label ?? "Background",
+                  80,
+                ),
+                reason: cleanText(
+                  value.compactOverlay.quietDown.reason,
+                  fallback.compactOverlay.quietDown?.reason ??
+                    "No action needed.",
+                  120,
+                ),
+              }
+            : fallback.compactOverlay.quietDown,
+          behaviorChange: cleanText(
+            value.compactOverlay.behaviorChange,
+            fallback.compactOverlay.behaviorChange,
+            150,
+          ),
+          nextObservation: cleanText(
+            value.compactOverlay.nextObservation,
+            fallback.compactOverlay.nextObservation,
+            140,
+          ),
+        }
+      : fallback.compactOverlay,
     mostImportantSignal: {
       label: cleanText(
         value.mostImportantSignal.label,

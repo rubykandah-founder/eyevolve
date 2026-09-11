@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   ActionPlanResponse,
+  AiEngine,
   AutonomyMode,
   AutonomousActionPlan,
   EyevolvePolicy,
@@ -20,8 +21,11 @@ type IntelligencePanelProps = {
   scores: ScoredChange[];
   ranking: string[];
   selectedActionIds: string[];
+  prioritizedChangeIds: string[];
+  ignoredChangeIds: string[];
   aiPrimaryChangeId?: string;
   aiSuppressedChangeIds: string[];
+  analysisEngine?: AiEngine;
   isAnalyzingScene: boolean;
   isPopulatingEvents: boolean;
   totalChangeCount: number;
@@ -30,8 +34,8 @@ type IntelligencePanelProps = {
   isEvolving: boolean;
   actionsPaused: boolean;
   onHoverChange: (changeId: string | null) => void;
-  onMoveRank: (changeId: string, direction: -1 | 1) => void;
-  onReorderRank: (orderedIds: string[]) => void;
+  onPrioritizeChange: (changeId: string) => void;
+  onIgnoreChange: (changeId: string) => void;
   onToggleAction: (changeId: string) => void;
   onSubmitHuman: () => void;
   onAcceptAi: () => void;
@@ -55,12 +59,71 @@ const IMAGE_READY_DELAY_MS = 5400;
 const CHANGE_SCAN_STEP_MS = 950;
 const ACTION_OVERLAY_DELAY_MS = 1800;
 
+function EventProgressStrip({
+  isAnalyzingScene,
+  isPopulatingEvents,
+  foundCount,
+  totalCount,
+  label,
+}: {
+  isAnalyzingScene: boolean;
+  isPopulatingEvents: boolean;
+  foundCount: number;
+  totalCount: number;
+  label?: string;
+}) {
+  const total = Math.max(1, totalCount);
+  const found = Math.min(total, foundCount);
+  const waitingForImagery = !isAnalyzingScene && !isPopulatingEvents && found === 0;
+  const progress = waitingForImagery
+    ? 12
+    : isAnalyzingScene
+    ? 58
+    : isPopulatingEvents
+      ? 58 + Math.round((found / total) * 36)
+      : found >= total
+        ? 100
+        : Math.round((found / total) * 58);
+  const status =
+    label ??
+    (waitingForImagery
+      ? "Waiting for satellite imagery"
+      : isAnalyzingScene
+        ? "Reading satellite changes"
+        : "Publishing events");
+  const detail = waitingForImagery
+    ? "Change reading starts after both images finish loading."
+    : isAnalyzingScene
+    ? "Comparing the before and after imagery."
+    : `${found}/${totalCount} detected events ready.`;
+
+  return (
+    <div className="event-progress-strip" aria-live="polite">
+      <div className="event-progress-copy">
+        <strong>{status}</strong>
+        <span>{detail}</span>
+      </div>
+      <div className="event-progress-meter">
+        <div className="event-progress-track">
+          <div
+            className={`event-progress-fill ${isAnalyzingScene ? "active" : ""}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <span>{progress}%</span>
+      </div>
+    </div>
+  );
+}
+
 function RankingEditor({
   scores,
   ranking,
   selectedActionIds,
-  onMoveRank,
-  onReorderRank,
+  prioritizedChangeIds,
+  ignoredChangeIds,
+  onPrioritizeChange,
+  onIgnoreChange,
   onToggleAction,
   onHoverChange,
 }: Pick<
@@ -68,92 +131,78 @@ function RankingEditor({
   | "scores"
   | "ranking"
   | "selectedActionIds"
-  | "onMoveRank"
-  | "onReorderRank"
+  | "prioritizedChangeIds"
+  | "ignoredChangeIds"
+  | "onPrioritizeChange"
+  | "onIgnoreChange"
   | "onToggleAction"
   | "onHoverChange"
 >) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const byId = new Map(scores.map((score) => [score.id, score]));
   const ranked = ranking.map((id) => byId.get(id)).filter(Boolean) as ScoredChange[];
-
-  const moveDraggedItem = (targetId: string) => {
-    if (!draggingId || draggingId === targetId) {
-      return;
-    }
-    const sourceIndex = ranked.findIndex((change) => change.id === draggingId);
-    const targetIndex = ranked.findIndex((change) => change.id === targetId);
-    if (sourceIndex < 0 || targetIndex < 0) {
-      return;
-    }
-    const next = ranked.map((change) => change.id);
-    const [item] = next.splice(sourceIndex, 1);
-    next.splice(targetIndex, 0, item);
-    onReorderRank(next);
-  };
+  const prioritized = new Set(prioritizedChangeIds);
+  const ignored = new Set(ignoredChangeIds);
 
   return (
     <div className="change-list">
-      {ranked.map((change, index) => (
+      {ranked.map((change, index) => {
+        const isPrioritized = prioritized.has(change.id);
+        const isIgnored = ignored.has(change.id);
+
+        return (
         <article
-          className={`change-card ${draggingId === change.id ? "dragging" : ""}`}
+          className={[
+            "change-card",
+            isPrioritized ? "user-prioritized" : "",
+            isIgnored ? "user-ignored" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           key={change.id}
-          draggable={ranked.length > 1}
-          onDragStart={(event) => {
-            setDraggingId(change.id);
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", change.id);
-          }}
-          onDragEnd={() => setDraggingId(null)}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            moveDraggedItem(change.id);
-            setDraggingId(null);
-          }}
           onMouseEnter={() => onHoverChange(change.id)}
           onMouseLeave={() => onHoverChange(null)}
         >
           <div className="change-row">
-            <span className="panel-badge drag-handle" aria-label="Drag to reorder">
+            <span className="panel-badge">
               {String(index + 1).padStart(2, "0")}
             </span>
             <div>
               <div className="change-name">{change.label}</div>
               <p className="change-description">{change.description}</p>
             </div>
-            <div className="rank-buttons">
+            <div className="judgment-buttons" aria-label={`Judge ${change.label}`}>
               <button
-                className="icon-button"
-                aria-label={`Move ${change.label} up`}
-                disabled={index === 0}
-                onClick={() => onMoveRank(change.id, -1)}
+                className={`judgment-button prioritize-button ${
+                  isPrioritized ? "active" : ""
+                }`}
+                aria-pressed={isPrioritized}
+                onClick={() => onPrioritizeChange(change.id)}
               >
-                ↑
+                Prioritize
               </button>
               <button
-                className="icon-button"
-                aria-label={`Move ${change.label} down`}
-                disabled={index === ranked.length - 1}
-                onClick={() => onMoveRank(change.id, 1)}
+                className={`judgment-button ignore-button ${
+                  isIgnored ? "active" : ""
+                }`}
+                aria-pressed={isIgnored}
+                onClick={() => onIgnoreChange(change.id)}
               >
-                ↓
+                Ignore
               </button>
             </div>
           </div>
           <label className="action-select">
             <input
               type="checkbox"
-              checked={selectedActionIds.includes(change.id)}
+              checked={selectedActionIds.includes(change.id) && !isIgnored}
+              disabled={isIgnored}
               onChange={() => onToggleAction(change.id)}
             />
             Requires intervention
           </label>
         </article>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -271,8 +320,11 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     scores,
     ranking,
     selectedActionIds,
+    prioritizedChangeIds,
+    ignoredChangeIds,
     aiPrimaryChangeId,
     aiSuppressedChangeIds,
+    analysisEngine,
     isAnalyzingScene,
     isPopulatingEvents,
     totalChangeCount,
@@ -281,8 +333,8 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     isEvolving,
     actionsPaused,
     onHoverChange,
-    onMoveRank,
-    onReorderRank,
+    onPrioritizeChange,
+    onIgnoreChange,
     onToggleAction,
     onSubmitHuman,
     onAcceptAi,
@@ -323,9 +375,12 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     : isPopulatingEvents
       ? `${scores.length}/${totalChangeCount} found`
       : `${scores.length} changes`;
+  const isControlledTraining = mode === "human" && policy.generation <= 2;
+  const detectionEngineLabel =
+    analysisEngine === "openai" ? "OpenAI detected changes" : "Local detector ready";
 
   useEffect(() => {
-    if (mode === "human" || isCorrecting) {
+    if (mode === "human" || isCorrecting || !eventsReady) {
       setAiActionPlan(null);
       return;
     }
@@ -366,6 +421,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
   }, [
     autonomousPrimaryId,
     fallbackActionPlan,
+    eventsReady,
     isCorrecting,
     mode,
     policy,
@@ -374,7 +430,10 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
   ]);
 
   useEffect(() => {
-    if (mode !== "autonomous" && mode !== "exception-management") {
+    if (
+      !eventsReady ||
+      (mode !== "autonomous" && mode !== "exception-management")
+    ) {
       setAutonomousScanIndex(0);
       setAutonomousImagesReady(false);
       setShowActionOverlay(false);
@@ -421,7 +480,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
       timers.forEach((timer) => window.clearTimeout(timer));
       onHoverChange(null);
     };
-  }, [autonomousPrimaryId, mode, onHoverChange, scene.id, scores]);
+  }, [autonomousPrimaryId, eventsReady, mode, onHoverChange, scene.id, scores]);
 
   if (mode === "human") {
     return (
@@ -434,26 +493,35 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           <span className="panel-badge">{eventProgressLabel}</span>
         </div>
         <p className="change-description">
-          Drag changes or use arrows to rank what matters, then mark any change
-          that requires intervention.
+          Prioritize what matters or ignore background events. Prioritized
+          events move to the top; ignored events move to the bottom.
         </p>
-        {!eventsReady ? (
-          <div className="event-populate-status">
-            <span className="eyebrow">Populating events</span>
-            <strong>
-              {isAnalyzingScene
-                ? "Reading satellite delta..."
-                : "Adding detected changes one at a time..."}
-            </strong>
-            <p>Each detected change is highlighted on the imagery as it appears.</p>
+        {isControlledTraining ? (
+          <div className="ai-detection-note">
+            <span className="eyebrow">AI change detection</span>
+            <strong>{detectionEngineLabel}</strong>
+            <p>
+              In this training scene, AI identifies the satellite changes. Your
+              ranking and action choices teach EYEVOLVE what those changes mean.
+            </p>
           </div>
+        ) : null}
+        {!eventsReady ? (
+          <EventProgressStrip
+            isAnalyzingScene={isAnalyzingScene}
+            isPopulatingEvents={isPopulatingEvents}
+            foundCount={scores.length}
+            totalCount={totalChangeCount}
+          />
         ) : null}
         <RankingEditor
           scores={scores}
           ranking={ranking}
           selectedActionIds={selectedActionIds}
-          onMoveRank={onMoveRank}
-          onReorderRank={onReorderRank}
+          prioritizedChangeIds={prioritizedChangeIds}
+          ignoredChangeIds={ignoredChangeIds}
+          onPrioritizeChange={onPrioritizeChange}
+          onIgnoreChange={onIgnoreChange}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
         />
@@ -479,8 +547,10 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           scores={scores}
           ranking={ranking}
           selectedActionIds={selectedActionIds}
-          onMoveRank={onMoveRank}
-          onReorderRank={onReorderRank}
+          prioritizedChangeIds={prioritizedChangeIds}
+          ignoredChangeIds={ignoredChangeIds}
+          onPrioritizeChange={onPrioritizeChange}
+          onIgnoreChange={onIgnoreChange}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
         />
@@ -523,24 +593,30 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           <span className="panel-badge">{eventsReady ? "Human confirms" : eventProgressLabel}</span>
         </div>
         {!eventsReady ? (
-          <div className="event-populate-status">
-            <span className="eyebrow">Populating events</span>
-            <strong>Building the AI priority list...</strong>
-            <p>The event list will finish before confirmation is available.</p>
-          </div>
+          <EventProgressStrip
+            isAnalyzingScene={isAnalyzingScene}
+            isPopulatingEvents={isPopulatingEvents}
+            foundCount={scores.length}
+            totalCount={totalChangeCount}
+            label="Building AI priority list"
+          />
         ) : null}
-        <AiPriorityList scores={scores} onHoverChange={onHoverChange} showIgnored />
-        <div className="learned-callout">
-          <div className="eyebrow">Action recommendation</div>
-          <strong>
-            {actionable ? actionPlan.headline : "No intervention recommended"}
-          </strong>
-          <p className="change-description">
-            {actionable
-              ? actionPlan.description
-              : "No change crossed the current learned action threshold."}
-          </p>
-        </div>
+        {eventsReady ? (
+          <>
+            <AiPriorityList scores={scores} onHoverChange={onHoverChange} showIgnored />
+            <div className="learned-callout">
+              <div className="eyebrow">Action recommendation</div>
+              <strong>
+                {actionable ? actionPlan.headline : "No intervention recommended"}
+              </strong>
+              <p className="change-description">
+                {actionable
+                  ? actionPlan.description
+                  : "No change crossed the current learned action threshold."}
+              </p>
+            </div>
+          </>
+        ) : null}
         <div className="button-row">
           <button className="primary-button" disabled={isEvolving || !eventsReady} onClick={onAcceptAi}>
             {isEvolving ? "Updating trust..." : "Yes, matches my judgment"}

@@ -1,6 +1,6 @@
 import type { EyevolveState } from "./types";
 import { initialPolicy } from "./learning";
-import { modeFromAutonomy } from "./autonomy";
+import { calculateAutonomy, modeFromAutonomy } from "./autonomy";
 
 export const STORAGE_KEY = "eyevolve.state.v1";
 export const STATE_VERSION = 1;
@@ -32,7 +32,18 @@ export const loadState = () => {
     if (parsed.version !== STATE_VERSION || !parsed.policy) {
       return createInitialState();
     }
-    return parsed;
+    const hasEvidence =
+      parsed.policy.judgmentsObserved > 0 ||
+      parsed.policy.aiAgreements + parsed.policy.aiCorrections > 0;
+    const policy = hasEvidence
+      ? { ...parsed.policy, autonomy: calculateAutonomy(parsed.policy) }
+      : parsed.policy;
+    return {
+      ...parsed,
+      policy,
+      currentMode:
+        parsed.seenSceneIds.length < 2 ? "human" : modeFromAutonomy(policy.autonomy),
+    };
   } catch {
     return createInitialState();
   }

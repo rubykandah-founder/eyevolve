@@ -193,7 +193,10 @@ export const selectAutonomousActionPlan = (
   return {
     kind: shouldEscalate ? "escalate" : "notify",
     label: shouldEscalate ? "Escalate" : "Notify",
-    headline: shouldEscalate ? "Contact response service" : "Notify service desk",
+    headline:
+      actionable.suggestedAction ??
+      scene.recommendedAction ??
+      (shouldEscalate ? "Contact response service" : "Notify service desk"),
     description:
       actionable.suggestedAction ??
       scene.recommendedAction ??

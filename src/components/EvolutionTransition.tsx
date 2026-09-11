@@ -2,10 +2,7 @@ import { FEATURE_KEYS, type EvolutionEvent } from "@/lib/types";
 import { featureLabel, getScene } from "@/lib/scenes";
 import {
   beforeNowSentence,
-  knownAndUnsure,
-  latestCapabilityUnlock,
   selectAutonomousActionPlan,
-  unlockedCapabilities,
 } from "@/lib/evolution-narrative";
 import { scoreScene } from "@/lib/scoring";
 
@@ -37,6 +34,7 @@ export function EvolutionTransition({
 }: EvolutionTransitionProps) {
   const scene = getScene(event.sceneId);
   const narrative = event.summaryNarrative;
+  const overlay = narrative?.compactOverlay;
   const beforeScored = scoreScene(scene, event.before);
   const scored = scoreScene(scene, event.after);
   const beforePrimary =
@@ -46,20 +44,10 @@ export function EvolutionTransition({
     scored.find((change) => change.actionRequired && !change.ignored) ?? scored[0];
   const actionPlan = selectAutonomousActionPlan(scene, primary);
   const beforeNow = beforeNowSentence(beforePrimary, primary);
-  const knowledge = knownAndUnsure(event.after);
-  const unlocked = unlockedCapabilities(event.after.generation);
-  const latestUnlock = latestCapabilityUnlock(
-    event.before.generation,
-    event.after.generation,
-  );
   const background = scored
     .filter((change) => change.id !== primary?.id)
     .filter((change) => change.ignored || change.noiseCandidate || change.actionScore < event.after.actionThreshold)
     .slice(0, 3);
-  const watchOnly = scored
-    .filter((change) => change.id !== primary?.id)
-    .filter((change) => !background.some((item) => item.id === change.id))
-    .slice(0, 2);
   const uncertainDimensions = FEATURE_KEYS.filter((key) => key !== "visualNoise")
     .sort(
       (a, b) =>
@@ -68,153 +56,73 @@ export function EvolutionTransition({
     )
     .slice(0, 2)
     .map((key) => featureLabel(key).toLowerCase());
+  const primaryLabel = overlay?.prioritize.label ?? primary?.label ?? "No urgent signal";
+  const primaryDescription =
+    overlay?.prioritize.reason ??
+    primary?.description ??
+    "No change clearly warranted action.";
+  const actionText =
+    overlay?.behaviorChange ??
+    `${actionPlan.label}: ${plainAction(Boolean(primary?.actionRequired), primary?.suggestedAction ?? scene.recommendedAction)}`;
+  const backgroundItem =
+    overlay?.quietDown ??
+    (background[0]
+      ? {
+          label: background[0].label,
+          reason: background[0].noiseCandidate || background[0].ignored
+            ? "Background change"
+            : "No action needed",
+        }
+      : undefined);
+  const nextObservation =
+    overlay?.nextObservation ??
+    `Next it will test ${sentenceJoin(uncertainDimensions)} against another scene.`;
+  const nowThinks =
+    overlay?.behaviorChange ??
+    narrative?.nowThinks ??
+    beforeNow.now.replace(/^Now:\s*/i, "");
 
   return (
     <div className="transition-overlay" role="dialog" aria-modal="true">
-      <div className="transition-card simple">
+      <div className="transition-card compact">
         <span className="eyebrow">Generation complete</span>
-        <h2>{narrative?.headline ?? "What EYEVOLVE understood"}</h2>
+        <h2>{overlay?.headline ?? narrative?.headline ?? "EYEVOLVE learned from this pass"}</h2>
         <p className="transition-lede">
-          {narrative?.lede ??
-            `From ${event.sceneTitle}, it learned which changes deserve action and which should stay in the background.`}
+          {overlay?.takeaway ??
+            narrative?.lede ??
+            `From ${event.sceneTitle}, it updated what deserves attention and what can stay quiet.`}
         </p>
 
-        <div className="learning-takeaway-grid">
-          <section className="learning-takeaway-card primary">
-            <span className="eyebrow">Most important signal</span>
-            <strong>
-              {narrative?.mostImportantSignal.label ??
-                primary?.label ??
-                "No urgent signal"}
-            </strong>
-            <p>
-              {narrative?.mostImportantSignal.description ??
-                primary?.description ??
-                "EYEVOLVE did not identify a change that clearly warranted action."}
-            </p>
-            <div className="takeaway-action">
-              {narrative?.mostImportantSignal.action ??
-                `${actionPlan.label}: ${plainAction(Boolean(primary?.actionRequired), primary?.suggestedAction ?? scene.recommendedAction)}`}
+        <div className="compact-learning">
+          <section className="compact-learning-row important">
+            <span>Prioritize</span>
+            <div>
+              <strong>{primaryLabel}</strong>
+              <p>{primaryDescription}</p>
             </div>
           </section>
 
-          <section className="learning-takeaway-card evolution-shift-card">
-            <span className="eyebrow">Used to think / now thinks</span>
-            <div className="before-now-row">
-            <span>Before</span>
-              <strong>
-                {narrative?.usedToThink ??
-                  beforeNow.before.replace(/^Before:\s*/i, "")}
-              </strong>
-            </div>
-            <div className="before-now-row now">
-              <span>Now</span>
-              <strong>
-                {narrative?.nowThinks ??
-                  beforeNow.now.replace(/^Now:\s*/i, "")}
-              </strong>
-            </div>
-          </section>
-
-          <section className="learning-takeaway-card">
-            <span className="eyebrow">Capability unlocked</span>
-            {narrative ? (
-              <>
-                <strong>{narrative.capabilityTitle}</strong>
-                <p>{narrative.capabilityDescription}</p>
-              </>
-            ) : latestUnlock ? (
-              <>
-                <strong>{latestUnlock.title}</strong>
-                <p>{latestUnlock.description}</p>
-              </>
-            ) : (
-              <>
-                <strong>
-                  {unlocked.at(-1)?.title ?? "Human-guided learning"}
-                </strong>
-                <p>
-                  {unlocked.at(-1)?.description ??
-                    "EYEVOLVE is still collecting enough examples to unlock autonomous behavior."}
-                </p>
-              </>
-            )}
-          </section>
-
-          <section className="learning-takeaway-card">
-            <span className="eyebrow">Not critical here</span>
-            {narrative?.notCritical.length ? (
-              <ul className="takeaway-list">
-                {narrative.notCritical.map((item) => (
-                  <li key={`${item.label}-${item.reason}`}>
-                    <strong>{item.label}</strong>
-                    <span>{item.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : background.length ? (
-              <ul className="takeaway-list">
-                {background.map((change) => (
-                  <li key={change.id}>
-                    <strong>{change.label}</strong>
-                    <span>{change.noiseCandidate || change.ignored ? "Background change" : "No dispatch needed"}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No detected change was safe to suppress in this observation.</p>
-            )}
-          </section>
-
-          <section className="learning-takeaway-card">
-            <span className="eyebrow">Keep watching</span>
-            {narrative?.keepWatching.length ? (
-              <ul className="takeaway-list">
-                {narrative.keepWatching.map((item) => (
-                  <li key={`${item.label}-${item.reason}`}>
-                    <strong>{item.label}</strong>
-                    <span>{item.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : watchOnly.length ? (
-              <ul className="takeaway-list">
-                {watchOnly.map((change) => (
-                  <li key={change.id}>
-                    <strong>{change.label}</strong>
-                    <span>Relevant, but not enough for action yet</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                EYEVOLVE is still least certain about{" "}
-                {sentenceJoin(uncertainDimensions)}.
-              </p>
-            )}
-          </section>
-
-          <section className="learning-takeaway-card">
-            <span className="eyebrow">Understands / still learning</span>
-            <div className="knowledge-list">
+          {backgroundItem ? (
+            <section className="compact-learning-row quiet">
+              <span>Quiet down</span>
               <div>
-                <span>Understands</span>
-                <strong>{sentenceJoin(narrative?.understands ?? knowledge.known)}</strong>
+                <strong>{backgroundItem.label}</strong>
+                <p>{backgroundItem.reason}</p>
               </div>
-              <div>
-                <span>Still learning</span>
-                <strong>{sentenceJoin(narrative?.stillLearning ?? knowledge.unsure)}</strong>
-              </div>
+            </section>
+          ) : null}
+
+          <section className="compact-learning-row">
+            <span>Now</span>
+            <div>
+              <strong>{nowThinks}</strong>
+              <p>{actionText}</p>
             </div>
-            <p className="muted-copy">
-              {narrative?.nextObservation ??
-                `Next it will test ${sentenceJoin(uncertainDimensions)} against a new scene.`}
-            </p>
           </section>
 
-          <section className="learning-takeaway-card primary">
-            <span className="eyebrow">Rule carried forward</span>
-            <strong>{narrative?.ruleCarriedForward ?? event.learnedRule}</strong>
+          <section className="compact-next">
+            <span className="eyebrow">Next observation</span>
+            <strong>{nextObservation}</strong>
           </section>
         </div>
 

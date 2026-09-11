@@ -173,7 +173,7 @@ autonomy =
   0.10
   + 0.20 * evidence
   + 0.35 * agreementRate
-  + 0.25 * confidence
+  + 0.35 * confidence
   - 0.20 * correctionRate
 ```
 
@@ -185,9 +185,9 @@ The UI mode comes from autonomy, not generation number:
 
 ```txt
 0.00-0.35  Human learning
-0.35-0.68  AI review
-0.68-0.82  Exception management
-0.82-1.00  Autonomous
+0.35-0.70  AI review
+0.70-0.90  Exception management
+0.90-1.00  Autonomous
 ```
 
 This means the app can fail to earn more autonomy if the user keeps correcting

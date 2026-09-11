@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EvolutionHistory } from "@/components/EvolutionHistory";
 import { EvolutionTransition } from "@/components/EvolutionTransition";
 import { IntelligencePanel } from "@/components/IntelligencePanel";
@@ -27,7 +27,6 @@ import {
   saveState,
 } from "@/lib/storage";
 import type {
-  ActionPlanResponse,
   AiEngine,
   AutonomousActionPlan,
   EvolutionEvent,
@@ -178,42 +177,6 @@ async function requestSceneAnalysis(
   }
 }
 
-async function requestActionPlan(
-  policy: EyevolvePolicy,
-  scene: SceneDef,
-  scores: ScoredChange[],
-  mode: EyevolveState["currentMode"],
-  primaryChangeId?: string,
-): Promise<ActionPlanResponse> {
-  const fallbackPrimary =
-    scores.find((score) => score.id === primaryChangeId) ??
-    scores.find((score) => score.actionRequired && !score.ignored) ??
-    scores[0];
-  const fallback = selectAutonomousActionPlan(scene, fallbackPrimary);
-
-  try {
-    const response = await fetch("/api/action-plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        policy,
-        scene,
-        scores,
-        mode,
-        primaryChangeId,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Action-plan request failed");
-    }
-
-    return (await response.json()) as ActionPlanResponse;
-  } catch {
-    return { plan: fallback, engine: "local" };
-  }
-}
-
 async function requestGenerationSummary(
   event: EvolutionEvent,
   scene: SceneDef,
@@ -249,6 +212,8 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [ranking, setRanking] = useState<string[]>([]);
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
+  const [prioritizedChangeIds, setPrioritizedChangeIds] = useState<string[]>([]);
+  const [ignoredChangeIds, setIgnoredChangeIds] = useState<string[]>([]);
   const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [correctionReason, setCorrectionReason] = useState("Wrong priority");
@@ -271,6 +236,7 @@ export default function Home() {
   const [isAnalyzingScene, setIsAnalyzingScene] = useState(false);
   const [revealedChangeIds, setRevealedChangeIds] = useState<string[]>([]);
   const [isPopulatingEvents, setIsPopulatingEvents] = useState(false);
+  const analysisRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     const loaded = loadState();
@@ -321,7 +287,7 @@ export default function Home() {
     setIsAnalyzingScene(false);
     setRevealedChangeIds([]);
     setIsPopulatingEvents(false);
-    setTileCycle((current) => current + 1);
+    analysisRequestRef.current = null;
   }, [baseScene.id]);
 
   const handleTilesComplete = useCallback(
@@ -344,12 +310,15 @@ export default function Home() {
       !hydrated ||
       tileReady.sceneId !== baseScene.id ||
       !tileReady.before ||
-      !tileReady.after
+      !tileReady.after ||
+      sceneAnalysis ||
+      analysisRequestRef.current === baseScene.id
     ) {
       return;
     }
 
     let cancelled = false;
+    analysisRequestRef.current = baseScene.id;
     setIsAnalyzingScene(true);
     void requestSceneAnalysis(
       state.policy,
@@ -382,8 +351,11 @@ export default function Home() {
 
     return () => {
       cancelled = true;
+      if (analysisRequestRef.current === baseScene.id) {
+        analysisRequestRef.current = null;
+      }
     };
-  }, [baseScene, hydrated, state, tileReady]);
+  }, [baseScene, hydrated, sceneAnalysis, state, tileReady]);
 
   useEffect(() => {
     if (!sceneAnalysis) {
@@ -423,6 +395,8 @@ export default function Home() {
   useEffect(() => {
     setRanking(scene.changes.map((change) => change.id));
     setSelectedActionIds([]);
+    setPrioritizedChangeIds([]);
+    setIgnoredChangeIds([]);
     setHoveredChangeId(null);
     setIsCorrecting(false);
   }, [scene.id, scene.changes]);
@@ -434,25 +408,49 @@ export default function Home() {
     return scene.changes.find((change) => change.id === hoveredChangeId)?.objectIds ?? [];
   }, [hoveredChangeId, scene.changes]);
 
-  const moveRank = (changeId: string, direction: -1 | 1) => {
-    setRanking((current) => {
-      const index = current.indexOf(changeId);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= current.length) {
-        return current;
-      }
-      const next = [...current];
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
-      return next;
-    });
+  const rankWithJudgments = (
+    current: string[],
+    prioritized: string[],
+    ignored: string[],
+  ) => {
+    const sceneIds = scene.changes.map((change) => change.id);
+    const sceneIdSet = new Set(sceneIds);
+    const prioritySet = new Set(prioritized);
+    const ignoredSet = new Set(ignored);
+    const validPrioritized = prioritized.filter((id) => sceneIdSet.has(id));
+    const validIgnored = ignored.filter((id) => sceneIdSet.has(id));
+    const neutral = current.filter(
+      (id) => sceneIdSet.has(id) && !prioritySet.has(id) && !ignoredSet.has(id),
+    );
+    const missingNeutral = sceneIds.filter(
+      (id) =>
+        !current.includes(id) && !prioritySet.has(id) && !ignoredSet.has(id),
+    );
+
+    return [...validPrioritized, ...neutral, ...missingNeutral, ...validIgnored];
   };
 
-  const reorderRank = (orderedIds: string[]) => {
-    setRanking((current) => {
-      const ordered = new Set(orderedIds);
-      return [...orderedIds, ...current.filter((id) => !ordered.has(id))];
-    });
+  const prioritizeChange = (changeId: string) => {
+    const nextPrioritized = prioritizedChangeIds.includes(changeId)
+      ? prioritizedChangeIds.filter((id) => id !== changeId)
+      : [changeId, ...prioritizedChangeIds.filter((id) => id !== changeId)];
+    const nextIgnored = ignoredChangeIds.filter((id) => id !== changeId);
+
+    setPrioritizedChangeIds(nextPrioritized);
+    setIgnoredChangeIds(nextIgnored);
+    setRanking((current) => rankWithJudgments(current, nextPrioritized, nextIgnored));
+  };
+
+  const ignoreChange = (changeId: string) => {
+    const nextIgnored = ignoredChangeIds.includes(changeId)
+      ? ignoredChangeIds.filter((id) => id !== changeId)
+      : [...ignoredChangeIds.filter((id) => id !== changeId), changeId];
+    const nextPrioritized = prioritizedChangeIds.filter((id) => id !== changeId);
+
+    setPrioritizedChangeIds(nextPrioritized);
+    setIgnoredChangeIds(nextIgnored);
+    setSelectedActionIds((current) => current.filter((id) => id !== changeId));
+    setRanking((current) => rankWithJudgments(current, nextPrioritized, nextIgnored));
   };
 
   const toggleAction = (changeId: string) => {
@@ -472,9 +470,12 @@ export default function Home() {
     setActiveTab("action");
     setEngineLabel("LOCAL POLICY ENGINE");
     setAnalysisByScene({});
+    analysisRequestRef.current = null;
     setTileReady({ sceneId: fresh.currentSceneId, before: false, after: false });
     setRevealedChangeIds([]);
     setIsPopulatingEvents(false);
+    setPrioritizedChangeIds([]);
+    setIgnoredChangeIds([]);
     setTileCycle((current) => current + 1);
   };
 
@@ -571,7 +572,7 @@ export default function Home() {
     );
     const nextMode =
       seenSceneIds.length < 2 ? "human" : modeFromAutonomy(advancedPolicy.autonomy);
-    let event: EvolutionEvent = {
+    const event: EvolutionEvent = {
       id: nowId(),
       generation: before.generation,
       sceneId: scene.id,
@@ -588,34 +589,6 @@ export default function Home() {
       after: advancedPolicy,
       createdAt: new Date().toISOString(),
     };
-
-    const scoredBefore = scoreScene(scene, before);
-    const scoredAfter = scoreScene(scene, advancedPolicy);
-    const primaryAfter =
-      scoredAfter.find((score) => score.actionRequired && !score.ignored) ??
-      scoredAfter[0];
-    const actionPlanResponse = await requestActionPlan(
-      advancedPolicy,
-      scene,
-      scoredAfter,
-      nextMode,
-      primaryAfter?.id,
-    );
-    const summaryResponse = await requestGenerationSummary(
-      event,
-      scene,
-      scoredBefore,
-      scoredAfter,
-      actionPlanResponse.plan,
-    );
-    if (summaryResponse) {
-      event = {
-        ...event,
-        summary: summaryResponse.summary.headline,
-        summaryNarrative: summaryResponse.summary,
-        summaryEngine: summaryResponse.engine,
-      };
-    }
 
     const nextState: EyevolveState = {
       ...state,
@@ -636,6 +609,56 @@ export default function Home() {
     );
     setIsCorrecting(false);
     setIsEvolving(false);
+
+    const scoredBefore = scoreScene(scene, before);
+    const scoredAfter = scoreScene(scene, advancedPolicy);
+    const primaryAfter =
+      scoredAfter.find((score) => score.actionRequired && !score.ignored) ??
+      scoredAfter[0];
+    const summaryActionPlan = selectAutonomousActionPlan(scene, primaryAfter);
+
+    void requestGenerationSummary(
+      event,
+      scene,
+      scoredBefore,
+      scoredAfter,
+      summaryActionPlan,
+    ).then((summaryResponse) => {
+      if (!summaryResponse) {
+        return;
+      }
+
+      const summarizedEvent: EvolutionEvent = {
+        ...event,
+        summary: summaryResponse.summary.headline,
+        summaryNarrative: summaryResponse.summary,
+        summaryEngine: summaryResponse.engine,
+      };
+
+      setTransitionEvent((current) =>
+        current?.id === event.id ? summarizedEvent : current,
+      );
+      setPendingState((current) =>
+        current
+          ? {
+              ...current,
+              evolutionHistory: current.evolutionHistory.map((historyEvent) =>
+                historyEvent.id === event.id ? summarizedEvent : historyEvent,
+              ),
+            }
+          : current,
+      );
+      setState((current) =>
+        current.evolutionHistory.some((historyEvent) => historyEvent.id === event.id)
+          ? {
+              ...current,
+              evolutionHistory: current.evolutionHistory.map((historyEvent) =>
+                historyEvent.id === event.id ? summarizedEvent : historyEvent,
+              ),
+            }
+          : current,
+      );
+    });
   };
 
   const continueToNextObservation = () => {
@@ -713,8 +736,11 @@ export default function Home() {
               scores={visibleScores}
               ranking={ranking}
               selectedActionIds={selectedActionIds}
+              prioritizedChangeIds={prioritizedChangeIds}
+              ignoredChangeIds={ignoredChangeIds}
               aiPrimaryChangeId={sceneAnalysis?.primaryChangeId}
               aiSuppressedChangeIds={sceneAnalysis?.suppressedChangeIds ?? []}
+              analysisEngine={sceneAnalysis?.engine}
               isAnalyzingScene={isAnalyzingScene}
               isPopulatingEvents={isPopulatingEvents}
               totalChangeCount={scene.changes.length}
@@ -723,8 +749,8 @@ export default function Home() {
               isEvolving={isEvolving}
               actionsPaused={Boolean(transitionEvent)}
               onHoverChange={setHoveredChangeId}
-              onMoveRank={moveRank}
-              onReorderRank={reorderRank}
+              onPrioritizeChange={prioritizeChange}
+              onIgnoreChange={ignoreChange}
               onToggleAction={toggleAction}
               onSubmitHuman={() =>
                 void completeEvolution("human-training", ranking, selectedActionIds)

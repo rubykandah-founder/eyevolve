@@ -2,6 +2,9 @@ import type { AutonomyMode, EyevolvePolicy } from "./types";
 import { clamp01 } from "./scoring";
 
 const REQUIRED_EVIDENCE = 10;
+const AI_REVIEW_THRESHOLD = 0.35;
+const EXCEPTION_MANAGEMENT_THRESHOLD = 0.7;
+const AUTONOMOUS_THRESHOLD = 0.9;
 
 export const getAgreementRate = (policy: EyevolvePolicy) => {
   const feedbackCount = policy.aiAgreements + policy.aiCorrections;
@@ -22,19 +25,19 @@ export const calculateAutonomy = (policy: EyevolvePolicy) => {
     0.1 +
       0.2 * evidence +
       0.35 * agreementRate +
-      0.25 * policy.confidence -
+      0.35 * policy.confidence -
       0.2 * correctionRate,
   );
 };
 
 export const modeFromAutonomy = (autonomy: number): AutonomyMode => {
-  if (autonomy >= 0.82) {
+  if (autonomy >= AUTONOMOUS_THRESHOLD) {
     return "autonomous";
   }
-  if (autonomy >= 0.68) {
+  if (autonomy >= EXCEPTION_MANAGEMENT_THRESHOLD) {
     return "exception-management";
   }
-  if (autonomy >= 0.35) {
+  if (autonomy >= AI_REVIEW_THRESHOLD) {
     return "ai-review";
   }
   return "human";

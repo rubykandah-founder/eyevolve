@@ -26,7 +26,11 @@ export function SatellitePanel({
         <span className="panel-badge">{scene.title}</span>
       </div>
       <SceneRenderer objects={objects} highlightedObjectIds={highlightedObjectIds} />
-      <TileReveal sceneId={tileSceneKey ?? scene.id} phase={phase} onComplete={onTilesComplete} />
+      <TileReveal
+        sceneId={tileSceneKey ?? scene.id}
+        phase={phase}
+        onComplete={onTilesComplete}
+      />
     </section>
   );
 }

@@ -209,7 +209,7 @@ export async function POST(request: Request) {
           },
         },
       },
-      { timeout: 8000 },
+      { timeout: 4500 },
     );
 
     const parsed = JSON.parse(response.output_text);
