@@ -21,27 +21,29 @@ Use this walkthrough when showing EYEVOLVE to a reviewer.
 4. Click **Reset evolution** so the demo begins at Generation 1.
 
 If no key is configured, the app still runs. The header will indicate the local
-policy engine instead of AI-driven policy.
+analysis or policy engine instead of AI-driven behavior.
 
 ## 60-90 Second Script
 
 1. "EYEVOLVE watches satellite deltas and learns what I care about."
-2. Generation 1: rank roadway obstruction and swerving traffic above cloud and shadow changes.
-3. Mark the roadway hazard as requiring intervention.
-4. Submit judgment and pause on the transition screen.
-5. Point to attention/action weight diffs and autonomy changing.
-6. Generation 2: rank unattended forest fire highest and select intervention.
-7. Continue and explain that the policy, not a hard-coded level, drives the next behavior.
-8. In AI review mode, accept the AI judgment if it looks right, or correct it.
-9. Show that correction can reduce trust/autonomy.
-10. In exception management, point out auto-suppressed noise.
-11. In autonomous mode, show the simulated dispatch call.
-12. End on history: "The user did not configure automation. Their use created it."
+2. After the satellite tiles finish loading, point out that OpenAI populates the observed change events when a key is present.
+3. Generation 1: rank roadway obstruction and swerving traffic above cloud and shadow changes.
+4. Mark the roadway hazard as requiring intervention.
+5. Submit judgment and pause on the transition screen.
+6. Point out the AI-written summary of what EYEVOLVE learned.
+7. Generation 2: rank unattended forest fire highest and select intervention.
+8. Continue and explain that the policy, not a hard-coded level, drives the next behavior.
+9. In AI review mode, accept the AI judgment if it looks right, or correct it.
+10. Show that correction can reduce trust/autonomy.
+11. In exception management, point out AI-driven suppression and highlight behavior.
+12. In autonomous mode, show the model-chosen simulated action: call, ticket, watch, or verification.
+13. End on history: "The user did not configure automation. Their use created it."
 
 ## What to Emphasize
 
 - Attention and actionability are separate learned policies.
-- OpenAI proposes bounded deltas; the app validates and applies them.
+- OpenAI analyzes changes, plans safe simulated actions, proposes bounded deltas, and writes summaries.
+- The app validates model output and keeps local state authoritative.
 - Autonomy is earned through agreement, not forced by generation.
 - Uncertainty selects the next observation after training scenes.
 - The interface itself evolves as autonomy changes.

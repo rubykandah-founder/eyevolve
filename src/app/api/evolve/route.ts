@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { FEATURE_KEYS, type EvolutionProposal, type EvolveRequest } from "@/lib/types";
 import { MAX_AI_WEIGHT_DELTA, sanitizeProposal } from "@/lib/learning";
 import { clamp } from "@/lib/scoring";
+import { readPrompt } from "@/lib/server/openai-json";
 
 export const runtime = "nodejs";
 
@@ -162,14 +163,14 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const systemPrompt = await readPrompt("policy-evolution.md");
     const response = await client.responses.create(
       {
         model: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
         input: [
           {
             role: "system",
-            content:
-              "You are EYEVOLVE's bounded policy interpreter. You never replace application state. You propose small policy deltas that help an existing deterministic learner evolve from human feedback. Return only valid JSON matching the schema.",
+            content: systemPrompt,
           },
           {
             role: "user",

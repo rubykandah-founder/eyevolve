@@ -1,4 +1,5 @@
 import type {
+  AutonomousActionPlan,
   EyevolvePolicy,
   FeatureKey,
   SceneDef,
@@ -6,28 +7,6 @@ import type {
 } from "./types";
 import { FEATURE_KEYS } from "./types";
 import { featureLabel } from "./scenes";
-
-export type AutonomousActionKind =
-  | "suppress"
-  | "watch"
-  | "verify"
-  | "ticket"
-  | "notify"
-  | "escalate";
-
-export type AutonomousActionPlan = {
-  kind: AutonomousActionKind;
-  label: string;
-  headline: string;
-  description: string;
-  receiverLabel: string;
-  receiverRole: string;
-  bridgeLabel: string;
-  stateLabel: string;
-  completeLabel: string;
-  transcript: { speaker: string; text: string }[];
-  steps: { label: string; detail: string }[];
-};
 
 const containsAny = (text: string, terms: string[]) => {
   const lower = text.toLowerCase();

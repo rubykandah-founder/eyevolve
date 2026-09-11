@@ -36,6 +36,7 @@ export function EvolutionTransition({
   onContinue,
 }: EvolutionTransitionProps) {
   const scene = getScene(event.sceneId);
+  const narrative = event.summaryNarrative;
   const beforeScored = scoreScene(scene, event.before);
   const scored = scoreScene(scene, event.after);
   const beforePrimary =
@@ -72,41 +73,57 @@ export function EvolutionTransition({
     <div className="transition-overlay" role="dialog" aria-modal="true">
       <div className="transition-card simple">
         <span className="eyebrow">Generation complete</span>
-        <h2>What EYEVOLVE understood</h2>
+        <h2>{narrative?.headline ?? "What EYEVOLVE understood"}</h2>
         <p className="transition-lede">
-          From {event.sceneTitle}, it learned which changes deserve action and
-          which should stay in the background.
+          {narrative?.lede ??
+            `From ${event.sceneTitle}, it learned which changes deserve action and which should stay in the background.`}
         </p>
 
         <div className="learning-takeaway-grid">
           <section className="learning-takeaway-card primary">
             <span className="eyebrow">Most important signal</span>
-            <strong>{primary?.label ?? "No urgent signal"}</strong>
+            <strong>
+              {narrative?.mostImportantSignal.label ??
+                primary?.label ??
+                "No urgent signal"}
+            </strong>
             <p>
-              {primary?.description ??
+              {narrative?.mostImportantSignal.description ??
+                primary?.description ??
                 "EYEVOLVE did not identify a change that clearly warranted action."}
             </p>
             <div className="takeaway-action">
-              {actionPlan.label}:{" "}
-              {plainAction(Boolean(primary?.actionRequired), primary?.suggestedAction ?? scene.recommendedAction)}
+              {narrative?.mostImportantSignal.action ??
+                `${actionPlan.label}: ${plainAction(Boolean(primary?.actionRequired), primary?.suggestedAction ?? scene.recommendedAction)}`}
             </div>
           </section>
 
           <section className="learning-takeaway-card evolution-shift-card">
             <span className="eyebrow">Used to think / now thinks</span>
             <div className="before-now-row">
-              <span>Before</span>
-              <strong>{beforeNow.before.replace(/^Before:\s*/i, "")}</strong>
+            <span>Before</span>
+              <strong>
+                {narrative?.usedToThink ??
+                  beforeNow.before.replace(/^Before:\s*/i, "")}
+              </strong>
             </div>
             <div className="before-now-row now">
               <span>Now</span>
-              <strong>{beforeNow.now.replace(/^Now:\s*/i, "")}</strong>
+              <strong>
+                {narrative?.nowThinks ??
+                  beforeNow.now.replace(/^Now:\s*/i, "")}
+              </strong>
             </div>
           </section>
 
           <section className="learning-takeaway-card">
             <span className="eyebrow">Capability unlocked</span>
-            {latestUnlock ? (
+            {narrative ? (
+              <>
+                <strong>{narrative.capabilityTitle}</strong>
+                <p>{narrative.capabilityDescription}</p>
+              </>
+            ) : latestUnlock ? (
               <>
                 <strong>{latestUnlock.title}</strong>
                 <p>{latestUnlock.description}</p>
@@ -126,7 +143,16 @@ export function EvolutionTransition({
 
           <section className="learning-takeaway-card">
             <span className="eyebrow">Not critical here</span>
-            {background.length ? (
+            {narrative?.notCritical.length ? (
+              <ul className="takeaway-list">
+                {narrative.notCritical.map((item) => (
+                  <li key={`${item.label}-${item.reason}`}>
+                    <strong>{item.label}</strong>
+                    <span>{item.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : background.length ? (
               <ul className="takeaway-list">
                 {background.map((change) => (
                   <li key={change.id}>
@@ -142,7 +168,16 @@ export function EvolutionTransition({
 
           <section className="learning-takeaway-card">
             <span className="eyebrow">Keep watching</span>
-            {watchOnly.length ? (
+            {narrative?.keepWatching.length ? (
+              <ul className="takeaway-list">
+                {narrative.keepWatching.map((item) => (
+                  <li key={`${item.label}-${item.reason}`}>
+                    <strong>{item.label}</strong>
+                    <span>{item.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : watchOnly.length ? (
               <ul className="takeaway-list">
                 {watchOnly.map((change) => (
                   <li key={change.id}>
@@ -164,22 +199,22 @@ export function EvolutionTransition({
             <div className="knowledge-list">
               <div>
                 <span>Understands</span>
-                <strong>{sentenceJoin(knowledge.known)}</strong>
+                <strong>{sentenceJoin(narrative?.understands ?? knowledge.known)}</strong>
               </div>
               <div>
                 <span>Still learning</span>
-                <strong>{sentenceJoin(knowledge.unsure)}</strong>
+                <strong>{sentenceJoin(narrative?.stillLearning ?? knowledge.unsure)}</strong>
               </div>
             </div>
             <p className="muted-copy">
-              Next it will test {sentenceJoin(uncertainDimensions)} against a new
-              scene.
+              {narrative?.nextObservation ??
+                `Next it will test ${sentenceJoin(uncertainDimensions)} against a new scene.`}
             </p>
           </section>
 
           <section className="learning-takeaway-card primary">
             <span className="eyebrow">Rule carried forward</span>
-            <strong>{event.learnedRule}</strong>
+            <strong>{narrative?.ruleCarriedForward ?? event.learnedRule}</strong>
           </section>
         </div>
 

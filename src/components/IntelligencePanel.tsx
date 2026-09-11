@@ -1,23 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { AutonomyMode, SceneDef, ScoredChange } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  ActionPlanResponse,
+  AutonomyMode,
+  AutonomousActionPlan,
+  EyevolvePolicy,
+  SceneDef,
+  ScoredChange,
+} from "@/lib/types";
 import { selectAutonomousActionPlan } from "@/lib/evolution-narrative";
 import { formatScore } from "@/lib/scoring";
 import { SimulatedCall } from "./SimulatedCall";
 
 type IntelligencePanelProps = {
   scene: SceneDef;
+  policy: EyevolvePolicy;
   mode: AutonomyMode;
   scores: ScoredChange[];
   ranking: string[];
   selectedActionIds: string[];
+  aiPrimaryChangeId?: string;
+  aiSuppressedChangeIds: string[];
+  isAnalyzingScene: boolean;
+  isPopulatingEvents: boolean;
+  totalChangeCount: number;
   isCorrecting: boolean;
   correctionReason: string;
   isEvolving: boolean;
   actionsPaused: boolean;
   onHoverChange: (changeId: string | null) => void;
   onMoveRank: (changeId: string, direction: -1 | 1) => void;
+  onReorderRank: (orderedIds: string[]) => void;
   onToggleAction: (changeId: string) => void;
   onSubmitHuman: () => void;
   onAcceptAi: () => void;
@@ -46,6 +60,7 @@ function RankingEditor({
   ranking,
   selectedActionIds,
   onMoveRank,
+  onReorderRank,
   onToggleAction,
   onHoverChange,
 }: Pick<
@@ -54,23 +69,58 @@ function RankingEditor({
   | "ranking"
   | "selectedActionIds"
   | "onMoveRank"
+  | "onReorderRank"
   | "onToggleAction"
   | "onHoverChange"
 >) {
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const byId = new Map(scores.map((score) => [score.id, score]));
   const ranked = ranking.map((id) => byId.get(id)).filter(Boolean) as ScoredChange[];
+
+  const moveDraggedItem = (targetId: string) => {
+    if (!draggingId || draggingId === targetId) {
+      return;
+    }
+    const sourceIndex = ranked.findIndex((change) => change.id === draggingId);
+    const targetIndex = ranked.findIndex((change) => change.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return;
+    }
+    const next = ranked.map((change) => change.id);
+    const [item] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, item);
+    onReorderRank(next);
+  };
 
   return (
     <div className="change-list">
       {ranked.map((change, index) => (
         <article
-          className="change-card"
+          className={`change-card ${draggingId === change.id ? "dragging" : ""}`}
           key={change.id}
+          draggable={ranked.length > 1}
+          onDragStart={(event) => {
+            setDraggingId(change.id);
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", change.id);
+          }}
+          onDragEnd={() => setDraggingId(null)}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            moveDraggedItem(change.id);
+            setDraggingId(null);
+          }}
           onMouseEnter={() => onHoverChange(change.id)}
           onMouseLeave={() => onHoverChange(null)}
         >
           <div className="change-row">
-            <span className="panel-badge">{String(index + 1).padStart(2, "0")}</span>
+            <span className="panel-badge drag-handle" aria-label="Drag to reorder">
+              {String(index + 1).padStart(2, "0")}
+            </span>
             <div>
               <div className="change-name">{change.label}</div>
               <p className="change-description">{change.description}</p>
@@ -113,6 +163,7 @@ function AutonomousScanList({
   primaryId,
   imagesReady,
   scanIndex,
+  suppressedIds,
   primaryStatusLabel,
   onHoverChange,
 }: {
@@ -120,6 +171,7 @@ function AutonomousScanList({
   primaryId: string | undefined;
   imagesReady: boolean;
   scanIndex: number;
+  suppressedIds: string[];
   primaryStatusLabel: string;
   onHoverChange: (changeId: string | null) => void;
 }) {
@@ -138,13 +190,17 @@ function AutonomousScanList({
       {scores.map((change, index) => {
         const processed = index < scanIndex;
         const isPrimary = change.id === primaryId;
-        const suppressed = processed && !isPrimary;
+        const aiSuppressed = suppressedIds.includes(change.id);
+        const suppressed =
+          processed &&
+          !isPrimary &&
+          (aiSuppressed || change.ignored || !change.actionRequired);
         const status = !processed
           ? "Scanning"
           : isPrimary
             ? primaryStatusLabel
-            : change.ignored
-              ? "Suppressed"
+            : aiSuppressed || change.ignored
+              ? "AI suppressed"
               : "No action";
 
         return (
@@ -210,16 +266,23 @@ function AiPriorityList({
 export function IntelligencePanel(props: IntelligencePanelProps) {
   const {
     scene,
+    policy,
     mode,
     scores,
     ranking,
     selectedActionIds,
+    aiPrimaryChangeId,
+    aiSuppressedChangeIds,
+    isAnalyzingScene,
+    isPopulatingEvents,
+    totalChangeCount,
     isCorrecting,
     correctionReason,
     isEvolving,
     actionsPaused,
     onHoverChange,
     onMoveRank,
+    onReorderRank,
     onToggleAction,
     onSubmitHuman,
     onAcceptAi,
@@ -229,17 +292,86 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
     onSubmitCorrection,
     onRecordAutonomousAction,
   } = props;
-  const actionable = scores.find((score) => score.actionRequired && !score.ignored);
+  const aiPrimary = aiPrimaryChangeId
+    ? scores.find((score) => score.id === aiPrimaryChangeId)
+    : undefined;
+  const actionable =
+    aiPrimary?.actionRequired || aiPrimary?.suggestedAction
+      ? aiPrimary
+      : scores.find((score) => score.actionRequired && !score.ignored);
   const ignored = scores.filter((score) => score.ignored);
   const analyzed = scores.filter((score) => !score.ignored);
   const [autonomousScanIndex, setAutonomousScanIndex] = useState(0);
   const [autonomousImagesReady, setAutonomousImagesReady] = useState(false);
   const [showActionOverlay, setShowActionOverlay] = useState(false);
-  const autonomousPrimary = actionable ?? analyzed[0];
+  const [aiActionPlan, setAiActionPlan] = useState<AutonomousActionPlan | null>(
+    null,
+  );
+  const autonomousPrimary = aiPrimary ?? actionable ?? analyzed[0];
   const autonomousPrimaryId = autonomousPrimary?.id;
-  const actionPlan = selectAutonomousActionPlan(scene, autonomousPrimary);
+  const fallbackActionPlan = useMemo(
+    () => selectAutonomousActionPlan(scene, autonomousPrimary),
+    [autonomousPrimary, scene],
+  );
+  const actionPlan = aiActionPlan ?? fallbackActionPlan;
   const scanComplete =
     autonomousImagesReady && autonomousScanIndex >= scores.length;
+  const eventsReady =
+    !isAnalyzingScene && !isPopulatingEvents && scores.length === totalChangeCount;
+  const eventProgressLabel = isAnalyzingScene
+    ? "AI analyzing"
+    : isPopulatingEvents
+      ? `${scores.length}/${totalChangeCount} found`
+      : `${scores.length} changes`;
+
+  useEffect(() => {
+    if (mode === "human" || isCorrecting) {
+      setAiActionPlan(null);
+      return;
+    }
+
+    let cancelled = false;
+    setAiActionPlan(null);
+    void fetch("/api/action-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene,
+        policy,
+        scores,
+        primaryChangeId: autonomousPrimaryId,
+        mode,
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Action planning failed");
+        }
+        return response.json() as Promise<ActionPlanResponse>;
+      })
+      .then((response) => {
+        if (!cancelled) {
+          setAiActionPlan(response.plan);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiActionPlan(fallbackActionPlan);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    autonomousPrimaryId,
+    fallbackActionPlan,
+    isCorrecting,
+    mode,
+    policy,
+    scene,
+    scores,
+  ]);
 
   useEffect(() => {
     if (mode !== "autonomous" && mode !== "exception-management") {
@@ -299,22 +431,34 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
             <span className="eyebrow">Human training mode</span>
             <h2>Rank what matters</h2>
           </div>
-          <span className="panel-badge">{scores.length} changes</span>
+          <span className="panel-badge">{eventProgressLabel}</span>
         </div>
         <p className="change-description">
-          Move changes from most to least important, then mark any change that
-          requires intervention.
+          Drag changes or use arrows to rank what matters, then mark any change
+          that requires intervention.
         </p>
+        {!eventsReady ? (
+          <div className="event-populate-status">
+            <span className="eyebrow">Populating events</span>
+            <strong>
+              {isAnalyzingScene
+                ? "Reading satellite delta..."
+                : "Adding detected changes one at a time..."}
+            </strong>
+            <p>Each detected change is highlighted on the imagery as it appears.</p>
+          </div>
+        ) : null}
         <RankingEditor
           scores={scores}
           ranking={ranking}
           selectedActionIds={selectedActionIds}
           onMoveRank={onMoveRank}
+          onReorderRank={onReorderRank}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
         />
         <div className="button-row">
-          <button className="primary-button" disabled={isEvolving} onClick={onSubmitHuman}>
+          <button className="primary-button" disabled={isEvolving || !eventsReady} onClick={onSubmitHuman}>
             {isEvolving ? "Updating policy..." : "Submit judgment"}
           </button>
         </div>
@@ -336,6 +480,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           ranking={ranking}
           selectedActionIds={selectedActionIds}
           onMoveRank={onMoveRank}
+          onReorderRank={onReorderRank}
           onToggleAction={onToggleAction}
           onHoverChange={onHoverChange}
         />
@@ -375,25 +520,32 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
             <span className="eyebrow">AI review mode</span>
             <h2>EYEVOLVE judgment</h2>
           </div>
-          <span className="panel-badge">Human confirms</span>
+          <span className="panel-badge">{eventsReady ? "Human confirms" : eventProgressLabel}</span>
         </div>
+        {!eventsReady ? (
+          <div className="event-populate-status">
+            <span className="eyebrow">Populating events</span>
+            <strong>Building the AI priority list...</strong>
+            <p>The event list will finish before confirmation is available.</p>
+          </div>
+        ) : null}
         <AiPriorityList scores={scores} onHoverChange={onHoverChange} showIgnored />
         <div className="learned-callout">
           <div className="eyebrow">Action recommendation</div>
           <strong>
-            {actionable ? actionable.suggestedAction ?? scene.recommendedAction : "No intervention recommended"}
+            {actionable ? actionPlan.headline : "No intervention recommended"}
           </strong>
           <p className="change-description">
             {actionable
-              ? `${actionable.label} crossed the learned action threshold.`
+              ? actionPlan.description
               : "No change crossed the current learned action threshold."}
           </p>
         </div>
         <div className="button-row">
-          <button className="primary-button" disabled={isEvolving} onClick={onAcceptAi}>
+          <button className="primary-button" disabled={isEvolving || !eventsReady} onClick={onAcceptAi}>
             {isEvolving ? "Updating trust..." : "Yes, matches my judgment"}
           </button>
-          <button className="secondary-button" disabled={isEvolving} onClick={onStartCorrection}>
+          <button className="secondary-button" disabled={isEvolving || !eventsReady} onClick={onStartCorrection}>
             Correct EYEVOLVE
           </button>
         </div>
@@ -416,6 +568,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           primaryId={autonomousPrimaryId}
           imagesReady={autonomousImagesReady}
           scanIndex={autonomousScanIndex}
+          suppressedIds={aiSuppressedChangeIds}
           primaryStatusLabel={actionPlan.label}
           onHoverChange={onHoverChange}
         />
@@ -423,9 +576,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           <div className="eyebrow">Proposed action</div>
           <strong>
             {scanComplete
-              ? actionable
-                ? actionable.suggestedAction ?? scene.recommendedAction
-                : "Monitor only"
+              ? actionPlan.headline
               : "Scanning observed changes..."}
           </strong>
         </div>
@@ -468,6 +619,7 @@ export function IntelligencePanel(props: IntelligencePanelProps) {
           primaryId={autonomousPrimaryId}
           imagesReady={autonomousImagesReady}
           scanIndex={autonomousScanIndex}
+          suppressedIds={aiSuppressedChangeIds}
           primaryStatusLabel={actionPlan.label}
           onHoverChange={onHoverChange}
         />

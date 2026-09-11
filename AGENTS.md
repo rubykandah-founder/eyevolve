@@ -25,7 +25,8 @@ Use only:
 
 - React state for transient runtime state.
 - Browser `localStorage` for persisted EYEVOLVE session state.
-- The server-side OpenAI Responses API route for bounded evolution proposals.
+- Server-side OpenAI Responses API routes for bounded scene analysis, action
+  planning, policy evolution, and generation summaries.
 
 ## OpenAI Rules
 
@@ -44,13 +45,18 @@ Do not use:
 NEXT_PUBLIC_OPENAI_API_KEY
 ```
 
-The model may propose bounded policy deltas only. The app remains authoritative:
-validate, clamp, apply, recalculate, persist.
+The model may analyze scenes, choose safe simulated next steps, write
+transcripts/ticket logs, write summaries, and propose bounded policy deltas.
+The app remains authoritative: validate, clamp, apply, recalculate, persist.
 
 ## Files to Understand First
 
 - `src/app/page.tsx`: main product loop and state transitions.
-- `src/app/api/evolve/route.ts`: OpenAI integration and local fallback.
+- `src/app/api/analyze-scene/route.ts`: AI scene analysis and local fallback.
+- `src/app/api/action-plan/route.ts`: AI action planning and local fallback.
+- `src/app/api/evolve/route.ts`: bounded policy evolution and local fallback.
+- `src/app/api/generation-summary/route.ts`: AI transition summary and local fallback.
+- `src/prompts/*.md`: editable prompts for AI behavior.
 - `src/lib/types.ts`: data contracts.
 - `src/lib/learning.ts`: online learning and bounded proposal application.
 - `src/lib/scoring.ts`: attention/action/ignore scoring.

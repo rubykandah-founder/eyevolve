@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EvolutionHistory } from "@/components/EvolutionHistory";
 import { EvolutionTransition } from "@/components/EvolutionTransition";
 import { IntelligencePanel } from "@/components/IntelligencePanel";
 import { MissionHeader } from "@/components/MissionHeader";
 import { ObservationWorkspace } from "@/components/ObservationWorkspace";
 import { getScene } from "@/lib/scenes";
+import { selectAutonomousActionPlan } from "@/lib/evolution-narrative";
 import { calculateAutonomy, modeFromAutonomy } from "@/lib/autonomy";
 import {
   applyEvolutionProposal,
@@ -26,15 +27,33 @@ import {
   saveState,
 } from "@/lib/storage";
 import type {
+  ActionPlanResponse,
+  AiEngine,
+  AutonomousActionPlan,
   EvolutionEvent,
   EvolutionProposal,
   EvolveResponse,
   EyevolvePolicy,
   EyevolveState,
+  GenerationSummaryResponse,
   InteractionEvent,
+  SceneAnalysis,
+  SceneAnalysisResponse,
+  SceneDef,
+  ScoredChange,
 } from "@/lib/types";
 
 const nowId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+type SceneAnalysisCache = SceneAnalysis & {
+  engine: AiEngine;
+};
+
+type TileReadyState = {
+  sceneId: string;
+  before: boolean;
+  after: boolean;
+};
 
 const localProposal = (
   policy: EyevolvePolicy,
@@ -80,11 +99,10 @@ const localProposal = (
 
 async function requestEvolution(
   policy: EyevolvePolicy,
-  sceneId: string,
+  scene: SceneDef,
   interaction: InteractionEvent,
   state: EyevolveState,
 ): Promise<EvolveResponse> {
-  const scene = getScene(sceneId);
   const currentScores = scoreScene(scene, policy);
   try {
     const response = await fetch("/api/evolve", {
@@ -112,6 +130,120 @@ async function requestEvolution(
   }
 }
 
+const localSceneAnalysis = (
+  scene: SceneDef,
+  policy: EyevolvePolicy,
+): SceneAnalysis => {
+  const scored = scoreScene(scene, policy);
+  const primary = scored.find((score) => score.actionRequired && !score.ignored) ?? scored[0];
+  return {
+    changes: scene.changes,
+    primaryChangeId: primary?.id ?? scene.changes[0]?.id ?? "",
+    suppressedChangeIds: scored
+      .filter((score) => score.ignored || score.noiseCandidate)
+      .map((score) => score.id),
+    reasoningSummary:
+      "Local scene analysis used predefined change events because OpenAI was unavailable.",
+  };
+};
+
+async function requestSceneAnalysis(
+  policy: EyevolvePolicy,
+  scene: SceneDef,
+  candidateScores: ScoredChange[],
+  state: EyevolveState,
+): Promise<SceneAnalysisResponse> {
+  try {
+    const response = await fetch("/api/analyze-scene", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        policy,
+        scene,
+        candidateScores,
+        recentHistory: state.evolutionHistory.slice(-4).map((event) => event.summary),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Scene analysis failed");
+    }
+
+    return (await response.json()) as SceneAnalysisResponse;
+  } catch {
+    return {
+      analysis: localSceneAnalysis(scene, policy),
+      engine: "local",
+    };
+  }
+}
+
+async function requestActionPlan(
+  policy: EyevolvePolicy,
+  scene: SceneDef,
+  scores: ScoredChange[],
+  mode: EyevolveState["currentMode"],
+  primaryChangeId?: string,
+): Promise<ActionPlanResponse> {
+  const fallbackPrimary =
+    scores.find((score) => score.id === primaryChangeId) ??
+    scores.find((score) => score.actionRequired && !score.ignored) ??
+    scores[0];
+  const fallback = selectAutonomousActionPlan(scene, fallbackPrimary);
+
+  try {
+    const response = await fetch("/api/action-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        policy,
+        scene,
+        scores,
+        mode,
+        primaryChangeId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Action-plan request failed");
+    }
+
+    return (await response.json()) as ActionPlanResponse;
+  } catch {
+    return { plan: fallback, engine: "local" };
+  }
+}
+
+async function requestGenerationSummary(
+  event: EvolutionEvent,
+  scene: SceneDef,
+  scoredBefore: ScoredChange[],
+  scoredAfter: ScoredChange[],
+  actionPlan: AutonomousActionPlan,
+): Promise<GenerationSummaryResponse | null> {
+  try {
+    const response = await fetch("/api/generation-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event,
+        scene,
+        scoredBefore,
+        scoredAfter,
+        actionPlan,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Generation summary failed");
+    }
+
+    return (await response.json()) as GenerationSummaryResponse;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [state, setState] = useState<EyevolveState>(() => createInitialState());
   const [hydrated, setHydrated] = useState(false);
@@ -127,11 +259,27 @@ export default function Home() {
   const [pendingState, setPendingState] = useState<EyevolveState | null>(null);
   const [activeTab, setActiveTab] = useState<"action" | "log">("action");
   const [engineLabel, setEngineLabel] = useState("LOCAL POLICY ENGINE");
+  const [analysisByScene, setAnalysisByScene] = useState<
+    Record<string, SceneAnalysisCache>
+  >({});
+  const [tileReady, setTileReady] = useState<TileReadyState>({
+    sceneId: "",
+    before: false,
+    after: false,
+  });
+  const [tileCycle, setTileCycle] = useState(0);
+  const [isAnalyzingScene, setIsAnalyzingScene] = useState(false);
+  const [revealedChangeIds, setRevealedChangeIds] = useState<string[]>([]);
+  const [isPopulatingEvents, setIsPopulatingEvents] = useState(false);
 
   useEffect(() => {
     const loaded = loadState();
-    const latestEngine = loaded.evolutionHistory.at(-1)?.engine;
-    setState(loaded);
+    const normalized =
+      loaded.seenSceneIds.length < 2
+        ? { ...loaded, currentMode: "human" as const }
+        : loaded;
+    const latestEngine = normalized.evolutionHistory.at(-1)?.engine;
+    setState(normalized);
     setEngineLabel(
       latestEngine === "openai" ? "AI-DRIVEN POLICY" : "LOCAL POLICY ENGINE",
     );
@@ -144,11 +292,133 @@ export default function Home() {
     }
   }, [hydrated, state]);
 
-  const scene = useMemo(() => getScene(state.currentSceneId), [state.currentSceneId]);
+  const baseScene = useMemo(
+    () => getScene(state.currentSceneId),
+    [state.currentSceneId],
+  );
+  const sceneAnalysis = analysisByScene[baseScene.id];
+  const scene = useMemo(
+    () =>
+      sceneAnalysis
+        ? {
+            ...baseScene,
+            changes: sceneAnalysis.changes,
+          }
+        : baseScene,
+    [baseScene, sceneAnalysis],
+  );
   const scores = useMemo(
     () => scoreScene(scene, state.policy),
     [scene, state.policy],
   );
+  const visibleScores = useMemo(() => {
+    const visibleIds = new Set(revealedChangeIds);
+    return scores.filter((score) => visibleIds.has(score.id));
+  }, [revealedChangeIds, scores]);
+
+  useEffect(() => {
+    setTileReady({ sceneId: baseScene.id, before: false, after: false });
+    setIsAnalyzingScene(false);
+    setRevealedChangeIds([]);
+    setIsPopulatingEvents(false);
+    setTileCycle((current) => current + 1);
+  }, [baseScene.id]);
+
+  const handleTilesComplete = useCallback(
+    (phase: "before" | "after") => {
+      setTileReady((current) => {
+        if (current.sceneId !== baseScene.id) {
+          return current;
+        }
+        return {
+          ...current,
+          [phase]: true,
+        };
+      });
+    },
+    [baseScene.id],
+  );
+
+  useEffect(() => {
+    if (
+      !hydrated ||
+      tileReady.sceneId !== baseScene.id ||
+      !tileReady.before ||
+      !tileReady.after
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsAnalyzingScene(true);
+    void requestSceneAnalysis(
+      state.policy,
+      baseScene,
+      scoreScene(baseScene, state.policy),
+      state,
+    )
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setAnalysisByScene((current) => ({
+          ...current,
+          [baseScene.id]: {
+            ...response.analysis,
+            engine: response.engine,
+          },
+        }));
+        setEngineLabel(
+          response.engine === "openai"
+            ? "AI-DRIVEN ANALYSIS"
+            : "LOCAL ANALYSIS ENGINE",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAnalyzingScene(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseScene, hydrated, state, tileReady]);
+
+  useEffect(() => {
+    if (!sceneAnalysis) {
+      setRevealedChangeIds([]);
+      setIsPopulatingEvents(false);
+      return;
+    }
+
+    const changes = sceneAnalysis.changes;
+    const timers: number[] = [];
+    setRevealedChangeIds([]);
+    setIsPopulatingEvents(true);
+
+    changes.forEach((change, index) => {
+      timers.push(
+        window.setTimeout(() => {
+          setRevealedChangeIds((current) =>
+            current.includes(change.id) ? current : [...current, change.id],
+          );
+          setHoveredChangeId(change.id);
+        }, 500 + index * 900),
+      );
+    });
+
+    timers.push(
+      window.setTimeout(() => {
+        setIsPopulatingEvents(false);
+        setHoveredChangeId(sceneAnalysis.primaryChangeId || null);
+      }, 500 + changes.length * 900 + 700),
+    );
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [sceneAnalysis]);
 
   useEffect(() => {
     setRanking(scene.changes.map((change) => change.id));
@@ -178,6 +448,13 @@ export default function Home() {
     });
   };
 
+  const reorderRank = (orderedIds: string[]) => {
+    setRanking((current) => {
+      const ordered = new Set(orderedIds);
+      return [...orderedIds, ...current.filter((id) => !ordered.has(id))];
+    });
+  };
+
   const toggleAction = (changeId: string) => {
     setSelectedActionIds((current) =>
       current.includes(changeId)
@@ -194,6 +471,11 @@ export default function Home() {
     setTransitionEvent(null);
     setActiveTab("action");
     setEngineLabel("LOCAL POLICY ENGINE");
+    setAnalysisByScene({});
+    setTileReady({ sceneId: fresh.currentSceneId, before: false, after: false });
+    setRevealedChangeIds([]);
+    setIsPopulatingEvents(false);
+    setTileCycle((current) => current + 1);
   };
 
   const summarizeEvent = (
@@ -273,7 +555,7 @@ export default function Home() {
       createdAt: new Date().toISOString(),
     };
 
-    const response = await requestEvolution(localPolicy, scene.id, interaction, state);
+    const response = await requestEvolution(localPolicy, scene, interaction, state);
     const withProposal = applyEvolutionProposal(
       localPolicy,
       response.proposal,
@@ -287,8 +569,9 @@ export default function Home() {
       seenSceneIds,
       response.proposal.nextScenarioType,
     );
-    const nextMode = modeFromAutonomy(advancedPolicy.autonomy);
-    const event: EvolutionEvent = {
+    const nextMode =
+      seenSceneIds.length < 2 ? "human" : modeFromAutonomy(advancedPolicy.autonomy);
+    let event: EvolutionEvent = {
       id: nowId(),
       generation: before.generation,
       sceneId: scene.id,
@@ -305,6 +588,34 @@ export default function Home() {
       after: advancedPolicy,
       createdAt: new Date().toISOString(),
     };
+
+    const scoredBefore = scoreScene(scene, before);
+    const scoredAfter = scoreScene(scene, advancedPolicy);
+    const primaryAfter =
+      scoredAfter.find((score) => score.actionRequired && !score.ignored) ??
+      scoredAfter[0];
+    const actionPlanResponse = await requestActionPlan(
+      advancedPolicy,
+      scene,
+      scoredAfter,
+      nextMode,
+      primaryAfter?.id,
+    );
+    const summaryResponse = await requestGenerationSummary(
+      event,
+      scene,
+      scoredBefore,
+      scoredAfter,
+      actionPlanResponse.plan,
+    );
+    if (summaryResponse) {
+      event = {
+        ...event,
+        summary: summaryResponse.summary.headline,
+        summaryNarrative: summaryResponse.summary,
+        summaryEngine: summaryResponse.engine,
+      };
+    }
 
     const nextState: EyevolveState = {
       ...state,
@@ -369,6 +680,8 @@ export default function Home() {
           <ObservationWorkspace
             scene={scene}
             highlightedObjectIds={highlightedObjectIds}
+            onTilesComplete={handleTilesComplete}
+            tileSceneKey={`${baseScene.id}-${tileCycle}`}
           />
         </div>
 
@@ -395,16 +708,23 @@ export default function Home() {
           {activeTab === "action" ? (
             <IntelligencePanel
               scene={scene}
+              policy={state.policy}
               mode={state.currentMode}
-              scores={scores}
+              scores={visibleScores}
               ranking={ranking}
               selectedActionIds={selectedActionIds}
+              aiPrimaryChangeId={sceneAnalysis?.primaryChangeId}
+              aiSuppressedChangeIds={sceneAnalysis?.suppressedChangeIds ?? []}
+              isAnalyzingScene={isAnalyzingScene}
+              isPopulatingEvents={isPopulatingEvents}
+              totalChangeCount={scene.changes.length}
               isCorrecting={isCorrecting}
               correctionReason={correctionReason}
               isEvolving={isEvolving}
               actionsPaused={Boolean(transitionEvent)}
               onHoverChange={setHoveredChangeId}
               onMoveRank={moveRank}
+              onReorderRank={reorderRank}
               onToggleAction={toggleAction}
               onSubmitHuman={() =>
                 void completeEvolution("human-training", ranking, selectedActionIds)

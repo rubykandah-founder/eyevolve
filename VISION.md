@@ -22,13 +22,16 @@ The application loop is:
 
 ```txt
 Satellite observation
+-> OpenAI scene analysis
 -> Change data
 -> Current policy scores changes
 -> Human or AI judgment
 -> Interaction measured
+-> OpenAI action planning when action is needed
 -> Local policy learns
 -> OpenAI interprets bounded evolution
 -> Bounded deltas validated and applied
+-> OpenAI summarizes practical learning
 -> Confidence and uncertainty update
 -> Autonomy updates
 -> UI mode changes
@@ -67,8 +70,10 @@ intervention. A blocked road can be both attention-worthy and actionable.
 ## OpenAI's Role
 
 The deterministic learner keeps the app stable and debuggable. OpenAI
-participates materially by interpreting the latest interaction and proposing
-small bounded policy deltas, learned rules, and next-learning objectives.
+participates materially by analyzing scene changes, deciding which events to
+suppress or highlight, planning simulated actions, writing generation summaries,
+and proposing small bounded policy deltas, learned rules, and next-learning
+objectives.
 
 The application remains authoritative:
 

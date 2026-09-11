@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AutonomousActionPlan } from "@/lib/evolution-narrative";
+import type { AutonomousActionPlan } from "@/lib/types";
 
 type SimulatedCallProps = {
   service: string;
@@ -115,6 +115,28 @@ function HumanReceiverIcon() {
   );
 }
 
+function TicketReceiverIcon() {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true" className="call-icon">
+      <path
+        d="M18 10h20l10 10v34H18z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="4"
+      />
+      <path d="M38 10v12h10" fill="none" stroke="currentColor" strokeWidth="4" />
+      <path
+        d="M26 32h14M26 40h18M26 48h12"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="3"
+      />
+    </svg>
+  );
+}
+
 export function SimulatedCall({
   service,
   incident,
@@ -127,12 +149,27 @@ export function SimulatedCall({
   const transcript = useMemo(() => plan.transcript, [plan.transcript]);
   const prepSteps = plan.steps;
   const directoryRecord = useMemo(
-    () => simulatedDirectoryRecord(plan.receiverLabel, plan.kind),
-    [plan.kind, plan.receiverLabel],
+    () =>
+      plan.artifactLabel && plan.artifactValue && plan.artifactNote
+        ? {
+            label: plan.artifactLabel,
+            value: plan.artifactValue,
+            note: plan.artifactNote,
+          }
+        : simulatedDirectoryRecord(plan.receiverLabel, plan.kind),
+    [
+      plan.artifactLabel,
+      plan.artifactNote,
+      plan.artifactValue,
+      plan.kind,
+      plan.receiverLabel,
+    ],
   );
   const totalSteps = prepSteps.length + transcript.length;
   const isComplete = visibleLines >= totalSteps;
   const lookupResolved = visibleLines > 0 || isComplete;
+  const usesVoice = plan.kind === "notify" || plan.kind === "escalate";
+  const usesTicket = plan.kind === "ticket";
 
   useEffect(() => {
     setVisibleLines(0);
@@ -207,18 +244,32 @@ export function SimulatedCall({
           </div>
         </div>
         <div className="voice-bridge">
-          <div
-            className={`voice-bars ${paused || isComplete ? "paused" : ""}`}
-            aria-hidden="true"
-          >
-            {Array.from({ length: 9 }, (_, index) => (
-              <span key={index} />
-            ))}
-          </div>
+          {usesVoice ? (
+            <div
+              className={`voice-bars ${paused || isComplete ? "paused" : ""}`}
+              aria-hidden="true"
+            >
+              {Array.from({ length: 9 }, (_, index) => (
+                <span key={index} />
+              ))}
+            </div>
+          ) : usesTicket ? (
+            <div className={`ticket-ribbon ${paused || isComplete ? "paused" : ""}`} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          ) : (
+            <div className={`decision-ribbon ${paused || isComplete ? "paused" : ""}`} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
           <span>{plan.bridgeLabel}</span>
         </div>
         <div className="call-party human-party">
-          <HumanReceiverIcon />
+          {usesTicket ? <TicketReceiverIcon /> : <HumanReceiverIcon />}
           <div>
             <span className="eyebrow">{plan.receiverRole}</span>
             <strong>{plan.receiverLabel}</strong>

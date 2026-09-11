@@ -4,11 +4,15 @@ import { SatellitePanel } from "./SatellitePanel";
 type ObservationWorkspaceProps = {
   scene: SceneDef;
   highlightedObjectIds: string[];
+  onTilesComplete?: (phase: "before" | "after") => void;
+  tileSceneKey?: string;
 };
 
 export function ObservationWorkspace({
   scene,
   highlightedObjectIds,
+  onTilesComplete,
+  tileSceneKey,
 }: ObservationWorkspaceProps) {
   return (
     <div className="observation-workspace">
@@ -24,11 +28,15 @@ export function ObservationWorkspace({
           scene={scene}
           phase="before"
           highlightedObjectIds={highlightedObjectIds}
+          onTilesComplete={onTilesComplete}
+          tileSceneKey={tileSceneKey}
         />
         <SatellitePanel
           scene={scene}
           phase="after"
           highlightedObjectIds={highlightedObjectIds}
+          onTilesComplete={onTilesComplete}
+          tileSceneKey={tileSceneKey}
         />
       </div>
     </div>

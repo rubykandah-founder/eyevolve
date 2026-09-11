@@ -11,10 +11,13 @@ Implemented:
 - SVG satellite-style scene renderer.
 - Ten predefined data-driven scenes.
 - Tile acquisition animation.
+- AI scene analysis after both mosaics finish loading.
 - Human ranking and intervention controls.
 - Attention and action learning.
-- OpenAI Responses API route with structured JSON.
+- OpenAI Responses API routes with structured JSON.
 - Bounded policy deltas and deterministic fallback.
+- AI action plans for simulated calls, tickets, watch states, and verification.
+- AI generation-complete summaries.
 - Uncertainty-driven next-scene selection.
 - Autonomy-driven UI modes.
 - Evolution transition, activity trace, compact evolution log, and history.
@@ -33,11 +36,15 @@ Intentionally not implemented:
 
 ## OpenAI Behavior
 
-The OpenAI call is deliberately bounded. It can interpret a judgment and propose
-small policy deltas, but it cannot replace `EyevolveState`.
+OpenAI is used during the normal demo path for scene analysis, action planning,
+bounded policy evolution, and generation summaries.
 
-If OpenAI fails for any reason, the server returns a local proposal so the demo
-continues without a visible error.
+Every OpenAI call is deliberately bounded. The model can interpret scene changes,
+choose simulated next steps, write a transcript/ticket log, and propose small
+policy deltas, but it cannot replace `EyevolveState`.
+
+If OpenAI fails for any reason, the server returns local analysis, planning,
+evolution, or summary output so the demo continues without a visible error.
 
 ## Current Model Recommendation
 

@@ -13,11 +13,12 @@ The core product claim is:
 EYEVOLVE implements an autocatalytic loop:
 
 1. **Observe** a before/after satellite-style scene.
-2. **Measure** human ranking and intervention choices.
-3. **Learn** separate attention and actionability policies.
-4. **Judge** with OpenAI-driven bounded evolution proposals when available.
-5. **Evolve** confidence, uncertainty, autonomy, UI mode, and next-scenario choice.
-6. **Persist** the evolved state in browser `localStorage`.
+2. **Analyze** the scene with OpenAI, when available, to populate change events.
+3. **Measure** human ranking, intervention choices, or AI judgment.
+4. **Plan** simulated next steps with OpenAI for calls, tickets, watch states, or verification.
+5. **Learn** separate attention and actionability policies.
+6. **Evolve** with bounded OpenAI policy proposals and AI-written generation summaries.
+7. **Persist** the evolved state in browser `localStorage`.
 
 The app remains demo-safe: if OpenAI is unavailable, it automatically continues
 with its deterministic local evolution engine.
@@ -54,10 +55,13 @@ http://localhost:3000
 
 ## OpenAI Key Safety
 
-The API key is used only by the server route:
+The API key is used only by server routes:
 
 ```txt
+src/app/api/analyze-scene/route.ts
+src/app/api/action-plan/route.ts
 src/app/api/evolve/route.ts
+src/app/api/generation-summary/route.ts
 ```
 
 Do **not** use `NEXT_PUBLIC_OPENAI_API_KEY`. Public environment variables are
