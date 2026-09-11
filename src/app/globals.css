@@ -786,6 +786,98 @@ button:disabled {
   line-height: 1.4;
 }
 
+.source-lab-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.source-lab-intro,
+.source-file-row,
+.source-rule,
+.source-diff {
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.source-lab-intro strong {
+  display: block;
+  color: var(--blue);
+  font-size: 0.95rem;
+}
+
+.source-lab-intro p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.source-file-row {
+  display: grid;
+  gap: 5px;
+}
+
+.source-file-row code {
+  overflow: hidden;
+  color: var(--text);
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.source-rule {
+  display: grid;
+  gap: 7px;
+}
+
+.source-rule strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.source-rule p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.source-rule p span {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.source-diff summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.source-diff pre {
+  overflow: auto;
+  max-height: 220px;
+  margin: 10px 0 0;
+  border-radius: 7px;
+  padding: 10px;
+  background: #18232b;
+  color: #f5f7f8;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
 .transition-overlay {
   position: fixed;
   inset: 0;
@@ -1923,6 +2015,28 @@ button:disabled {
 
   .history-panel {
     overflow: auto;
+  }
+
+  .source-lab-panel {
+    gap: 7px;
+  }
+
+  .source-lab-intro,
+  .source-file-row,
+  .source-rule,
+  .source-diff {
+    padding: 8px;
+  }
+
+  .source-rule p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .source-diff pre {
+    max-height: 150px;
   }
 
   .change-list {

@@ -13,6 +13,7 @@ Browser React app
 -> /api/action-plan
 -> /api/evolve
 -> /api/generation-summary
+-> /api/source-evolution
 -> OpenAI Responses API, when OPENAI_API_KEY exists
 ```
 
@@ -26,6 +27,8 @@ used as persistence.
 - `src/app/api/action-plan/route.ts`: AI simulated action planning and fallback.
 - `src/app/api/evolve/route.ts`: bounded policy proposal integration and fallback.
 - `src/app/api/generation-summary/route.ts`: AI generation-complete narrative and fallback.
+- `src/app/api/source-evolution/route.ts`: whitelisted generated source-rule updates.
+- `src/generated/eyevolve-learned-rules.ts`: the only runtime-rewritable source file.
 - `src/prompts/*.md`: editable prompts for the four AI flows.
 - `src/lib/server/openai-json.ts`: shared server-only structured JSON helper.
 - `src/lib/types.ts`: shared state, scene, policy, and API types.
@@ -143,6 +146,8 @@ OpenAI participates in four places:
   verify, ticket, notify, or escalate, and writes the animated steps/transcript.
 - Policy evolution: the model proposes bounded attention/action deltas.
 - Generation summary: the model writes the popup explanation in practical terms.
+- Source evolution: the model proposes plain-language source rules, and the
+  server renders them into one generated TypeScript file.
 
 The policy-evolution route does not return full app state. It returns bounded
 proposals:
@@ -163,6 +168,20 @@ type EvolutionProposal = {
 Every delta is validated and clamped to `[-0.08, 0.08]` before being applied.
 Scene analysis, action planning, and generation summaries are also validated
 server-side. If any request fails, the app uses deterministic local output.
+
+## Source Evolution
+
+EYEVOLVE can literally change source code, but only inside:
+
+```txt
+src/generated/eyevolve-learned-rules.ts
+```
+
+After a generation completes, the browser calls `/api/source-evolution`. The
+server sends recent policy/history context to OpenAI when available. The model
+may propose short behavior rules, not arbitrary code. The server validates text
+lengths, assigns IDs, renders the TypeScript module itself, and writes only that
+whitelisted file. The Source tab shows the generated rules and the source diff.
 
 ## Autonomy
 

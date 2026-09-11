@@ -86,6 +86,22 @@ export type LearnedRule = {
   source: "local" | "openai";
 };
 
+export type SourceEvolutionRule = {
+  id: string;
+  generation: number;
+  title: string;
+  when: string;
+  then: string;
+  source: AiEngine;
+};
+
+export type SourceEvolutionSnapshot = {
+  version: number;
+  updatedAt: string;
+  summary: string;
+  rules: SourceEvolutionRule[];
+};
+
 export type EyevolvePolicy = {
   generation: number;
   attentionWeights: FeatureWeights;
@@ -271,4 +287,20 @@ export type GenerationSummaryRequest = {
 export type GenerationSummaryResponse = {
   summary: GenerationSummary;
   engine: AiEngine;
+};
+
+export type SourceEvolutionRequest = {
+  event: EvolutionEvent;
+  state: EyevolveState;
+  scene: SceneDef;
+};
+
+export type SourceEvolutionResponse = {
+  engine: AiEngine;
+  filePath: string;
+  summary: string;
+  beforeSource: string;
+  afterSource: string;
+  diff: string;
+  snapshot: SourceEvolutionSnapshot;
 };

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "noEmit": false,
+    "outDir": ".test-build",
+    "paths": {
+      "@/*": ["./src/*"],
+      "*": ["./*"]
+    },
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", ".next", ".test-build"]
+}

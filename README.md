@@ -18,12 +18,14 @@ EYEVOLVE implements an autocatalytic loop:
 4. **Plan** simulated next steps with OpenAI for calls, tickets, watch states, or verification.
 5. **Learn** separate attention and actionability policies.
 6. **Evolve** with bounded OpenAI policy proposals and AI-written generation summaries.
-7. **Persist** the evolved state in browser `localStorage`.
+7. **Rewrite** one whitelisted generated source file with learned behavior rules.
+8. **Persist** the evolved state in browser `localStorage`.
 
 For the “Evolve” requirement, EYEVOLVE’s designated self-changing subsystem is
 its policy layer: attention weights, action weights, uncertainty, trust,
-autonomy, scenario choice, and interface mode change from use. The prototype
-does not self-modify source code.
+autonomy, scenario choice, and interface mode change from use. It also has a
+literal source-evolution lane: after generations complete, the server may update
+only `src/generated/eyevolve-learned-rules.ts` with validated learned rules.
 
 The app remains demo-safe: if OpenAI is unavailable, it automatically continues
 with its deterministic local evolution engine.
@@ -67,6 +69,7 @@ src/app/api/analyze-scene/route.ts
 src/app/api/action-plan/route.ts
 src/app/api/evolve/route.ts
 src/app/api/generation-summary/route.ts
+src/app/api/source-evolution/route.ts
 ```
 
 Do **not** use `NEXT_PUBLIC_OPENAI_API_KEY`. Public environment variables are
@@ -90,11 +93,13 @@ Use **Reset evolution** in the UI to delete that state and return to Generation 
 - [Architecture](./docs/ARCHITECTURE.md): state model, learning loop, OpenAI route, and file map.
 - [Demo Guide](./docs/DEMO.md): 60-90 second walkthrough and reset instructions.
 - [Implementation Notes](./docs/IMPLEMENTATION_NOTES.md): scope, tradeoffs, and known limitations.
+- [Production Readiness](./docs/PRODUCTION_READINESS.md): public demo checklist and API-key safety.
 
 ## Scripts
 
 ```txt
 npm run dev
+npm run test
 npm run build
 npm run start
 ```

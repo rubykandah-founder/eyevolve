@@ -19,14 +19,17 @@ Do not add:
 - Firebase, Supabase, Postgres, SQLite, Redis, Prisma, vector DBs.
 - Real satellite APIs, map providers, computer vision, or geospatial services.
 - Real phone calls, Twilio, or emergency-service integrations.
-- LangChain, multi-agent frameworks, or source-code self-modification.
+- LangChain or multi-agent frameworks.
+- Source-code self-modification outside the whitelisted generated subsystem.
 
 Use only:
 
 - React state for transient runtime state.
 - Browser `localStorage` for persisted EYEVOLVE session state.
 - Server-side OpenAI Responses API routes for bounded scene analysis, action
-  planning, policy evolution, and generation summaries.
+  planning, policy evolution, generation summaries, and generated source-rule
+  updates.
+- Runtime source evolution only for `src/generated/eyevolve-learned-rules.ts`.
 
 ## OpenAI Rules
 
@@ -46,8 +49,9 @@ NEXT_PUBLIC_OPENAI_API_KEY
 ```
 
 The model may analyze scenes, choose safe simulated next steps, write
-transcripts/ticket logs, write summaries, and propose bounded policy deltas.
-The app remains authoritative: validate, clamp, apply, recalculate, persist.
+transcripts/ticket logs, write summaries, propose bounded policy deltas, and
+propose plain-language generated source rules. The app remains authoritative:
+validate, clamp, render, apply, recalculate, persist.
 
 ## Files to Understand First
 
@@ -56,6 +60,8 @@ The app remains authoritative: validate, clamp, apply, recalculate, persist.
 - `src/app/api/action-plan/route.ts`: AI action planning and local fallback.
 - `src/app/api/evolve/route.ts`: bounded policy evolution and local fallback.
 - `src/app/api/generation-summary/route.ts`: AI transition summary and local fallback.
+- `src/app/api/source-evolution/route.ts`: whitelisted generated source updates.
+- `src/generated/eyevolve-learned-rules.ts`: generated runtime source subsystem.
 - `src/prompts/*.md`: editable prompts for AI behavior.
 - `src/lib/types.ts`: data contracts.
 - `src/lib/learning.ts`: online learning and bounded proposal application.

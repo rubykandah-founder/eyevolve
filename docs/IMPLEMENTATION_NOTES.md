@@ -18,6 +18,7 @@ Implemented:
 - Bounded policy deltas and deterministic fallback.
 - AI action plans for simulated calls, tickets, watch states, and verification.
 - AI generation-complete summaries.
+- Whitelisted generated source evolution.
 - Uncertainty-driven next-scene selection.
 - Autonomy-driven UI modes.
 - Evolution transition, activity trace, compact evolution log, and history.
@@ -31,17 +32,21 @@ Intentionally not implemented:
 - Real map provider.
 - Computer vision.
 - Real emergency calls or Twilio.
-- Source-code rewriting.
+- Source-code rewriting outside `src/generated/eyevolve-learned-rules.ts`.
 - LangChain or multi-agent frameworks.
 
 ## OpenAI Behavior
 
 OpenAI is used during the normal demo path for scene analysis, action planning,
-bounded policy evolution, and generation summaries.
+bounded policy evolution, generation summaries, and source-rule generation.
 
 Every OpenAI call is deliberately bounded. The model can interpret scene changes,
 choose simulated next steps, write a transcript/ticket log, and propose small
-policy deltas, but it cannot replace `EyevolveState`.
+policy deltas, but it cannot replace `EyevolveState` or write arbitrary source.
+
+The source-evolution route is deliberately narrow. OpenAI proposes rule text;
+the server validates it and renders `src/generated/eyevolve-learned-rules.ts`.
+No other source path is writable by the runtime.
 
 If OpenAI fails for any reason, the server returns local analysis, planning,
 evolution, or summary output so the demo continues without a visible error.
@@ -81,3 +86,4 @@ Then manually walk through:
 4. Accept or correct AI review.
 5. Confirm exception-management behavior.
 6. Confirm autonomous simulated action.
+7. Open the Source tab and confirm the generated source rule changed.

@@ -6,6 +6,7 @@ import { EvolutionTransition } from "@/components/EvolutionTransition";
 import { IntelligencePanel } from "@/components/IntelligencePanel";
 import { MissionHeader } from "@/components/MissionHeader";
 import { ObservationWorkspace } from "@/components/ObservationWorkspace";
+import { SourceEvolutionLab } from "@/components/SourceEvolutionLab";
 import { getScene } from "@/lib/scenes";
 import { selectAutonomousActionPlan } from "@/lib/evolution-narrative";
 import { calculateAutonomy, modeFromAutonomy } from "@/lib/autonomy";
@@ -40,6 +41,7 @@ import type {
   SceneAnalysisResponse,
   SceneDef,
   ScoredChange,
+  SourceEvolutionResponse,
 } from "@/lib/types";
 import { FEATURE_KEYS } from "@/lib/types";
 
@@ -251,6 +253,28 @@ async function requestGenerationSummary(
   }
 }
 
+async function requestSourceEvolution(
+  event: EvolutionEvent,
+  scene: SceneDef,
+  state: EyevolveState,
+): Promise<SourceEvolutionResponse | null> {
+  try {
+    const response = await fetch("/api/source-evolution", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, scene, state }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Source evolution request failed");
+    }
+
+    return (await response.json()) as SourceEvolutionResponse;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [state, setState] = useState<EyevolveState>(() => createInitialState());
   const [hydrated, setHydrated] = useState(false);
@@ -267,8 +291,12 @@ export default function Home() {
     null,
   );
   const [pendingState, setPendingState] = useState<EyevolveState | null>(null);
-  const [activeTab, setActiveTab] = useState<"action" | "log">("action");
+  const [activeTab, setActiveTab] = useState<"action" | "log" | "source">(
+    "action",
+  );
   const [engineLabel, setEngineLabel] = useState("LOCAL POLICY ENGINE");
+  const [sourceEvolution, setSourceEvolution] =
+    useState<SourceEvolutionResponse | null>(null);
   const [analysisByScene, setAnalysisByScene] = useState<
     Record<string, SceneAnalysisCache>
   >({});
@@ -555,6 +583,7 @@ export default function Home() {
     setTransitionEvent(null);
     setActiveTab("action");
     setEngineLabel("LOCAL POLICY ENGINE");
+    setSourceEvolution(null);
     setAnalysisByScene({});
     analysisRequestRef.current = null;
     setTileReady({ sceneId: fresh.currentSceneId, before: false, after: false });
@@ -749,6 +778,12 @@ export default function Home() {
           : current,
       );
     });
+
+    void requestSourceEvolution(event, scene, nextState).then((result) => {
+      if (result) {
+        setSourceEvolution(result);
+      }
+    });
   };
 
   const continueToNextObservation = () => {
@@ -823,6 +858,14 @@ export default function Home() {
             >
               Evolution log
             </button>
+            <button
+              className={activeTab === "source" ? "active" : ""}
+              onClick={() => setActiveTab("source")}
+              role="tab"
+              aria-selected={activeTab === "source"}
+            >
+              Source
+            </button>
           </div>
 
           {activeTab === "action" ? (
@@ -887,8 +930,10 @@ export default function Home() {
                 )
               }
             />
-          ) : (
+          ) : activeTab === "log" ? (
             <EvolutionHistory events={state.evolutionHistory} />
+          ) : (
+            <SourceEvolutionLab latestMutation={sourceEvolution} />
           )}
         </aside>
       </section>

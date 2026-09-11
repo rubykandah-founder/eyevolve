@@ -37,7 +37,8 @@ analysis or policy engine instead of AI-driven behavior.
 10. Show that correction can reduce trust/autonomy.
 11. In exception management, point out AI-driven suppression and highlight behavior.
 12. In autonomous mode, show the model-chosen simulated action: call, ticket, watch, or verification.
-13. End on history: "The user did not configure automation. Their use created it."
+13. Open the Source tab to show `src/generated/eyevolve-learned-rules.ts` changed.
+14. End on history: "The user did not configure automation. Their use created it."
 
 ## What to Emphasize
 
@@ -47,6 +48,7 @@ analysis or policy engine instead of AI-driven behavior.
 - Autonomy is earned through agreement, not forced by generation.
 - Uncertainty selects the next observation after training scenes.
 - The interface itself evolves as autonomy changes.
+- A whitelisted generated source module rewrites learned rules after each generation.
 - State persists through refresh because it lives in `localStorage`.
 
 ## Good Demo Choices

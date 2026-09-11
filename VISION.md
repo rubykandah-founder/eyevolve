@@ -32,6 +32,7 @@ Satellite observation
 -> OpenAI interprets bounded evolution
 -> Bounded deltas validated and applied
 -> OpenAI summarizes practical learning
+-> Generated source rules update inside one whitelisted file
 -> Confidence and uncertainty update
 -> Autonomy updates
 -> UI mode changes
@@ -43,10 +44,11 @@ Every generation becomes the baseline for the next generation.
 
 ## What Evolves
 
-EYEVOLVE does not rewrite its source code. For this prototype, the designated
-self-changing subsystem is the operating policy that decides what to notice,
-what to suppress, what to do, and how much authority the interface should take.
-Evolution means:
+EYEVOLVE changes two bounded subsystems. The first is its operating policy,
+which decides what to notice, what to suppress, what to do, and how much
+authority the interface should take. The second is a literal generated source
+module, `src/generated/eyevolve-learned-rules.ts`, which the runtime may rewrite
+with validated learned rules after a generation completes. Evolution means:
 
 - Attention weights change what the system surfaces.
 - Action weights change what it recommends doing.
@@ -55,9 +57,37 @@ Evolution means:
 - Uncertainty changes which observation EYEVOLVE selects next.
 - Autonomy changes the interface itself.
 - High autonomy enables simulated action.
+- The generated source-rule module changes as new behaviors are learned.
 
-This was chosen instead of source-code rewriting because it is more legible,
-more stable for a take-home demo, and easier for a reviewer to inspect.
+Source rewriting is deliberately narrow: the model never emits arbitrary code.
+It proposes plain-language rules, and the server validates and renders the one
+generated TypeScript file.
+
+## Safety Boundary
+
+The demo is AI-first, but not model-authoritative. OpenAI can interpret,
+propose, summarize, plan, and draft generated source rules. EYEVOLVE validates,
+clamps, renders, and applies. Prompt files explicitly treat scene text, user
+history, model history, generated rules, and labels as untrusted data so a
+satellite event cannot smuggle instructions such as "ignore your schema" or
+"reveal the API key."
+
+This boundary matters because the product story depends on trust: EYEVOLVE can
+be adaptive without being reckless.
+
+## Testing Posture
+
+The prototype now includes lightweight automated tests for the core feature
+sets:
+
+- Scoring, learning, autonomy, and bounded policy deltas.
+- Scene selection, projection scenarios, generated source-rule shape, and prompt
+  injection guardrails.
+- A deterministic end-to-end evolution loop that trains on the first scenes,
+  applies bounded evolution, and selects the next observation.
+
+The tests are intentionally framework-light so the prototype remains easy to
+run and review.
 
 ## Attention vs. Action
 
@@ -98,6 +128,7 @@ product rather than a game.
 ## What Comes Next
 
 With more time, EYEVOLVE could add richer scene libraries, deeper policy
-inspection, exportable incident reports, team review, and real geospatial
-ingestion. The core idea should stay the same: meaningful use changes what the
-system becomes.
+inspection, exportable incident reports, team review, real geospatial
+ingestion, production rate limiting, and a review-gated source-evolution lane.
+The core idea should stay the same: meaningful use changes what the system
+becomes.
